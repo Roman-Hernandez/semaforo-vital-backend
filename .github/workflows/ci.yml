@@ -32,7 +32,7 @@ jobs:
         run: python -m pip install --upgrade pip ruff
 
       - name: Run Ruff
-        run: ruff check app
+        run: ruff check app tests
 
   validate:
     name: Validate application
@@ -61,6 +61,8 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -81,7 +83,7 @@ jobs:
         shell: bash
         run: |
           if find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit 2>/dev/null | grep -q .; then
-            pytest --cov=app --cov-report=term-missing --cov-report=xml
+            python -m pytest --cov=app --cov-report=term-missing --cov-report=xml
           else
             echo "No automated tests found yet; skipping pytest execution."
           fi
@@ -102,6 +104,7 @@ jobs:
     needs: [lint, validate, test]
     runs-on: ubuntu-latest
     env:
+      PYTHONPATH: ${{ github.workspace }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
     steps:
@@ -109,6 +112,26 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup Python
+        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Generate coverage for SonarQube
+        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+          if find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit 2>/dev/null | grep -q .; then
+            python -m pytest --cov=app --cov-report=xml
+          else
+            echo "No automated tests found; SonarQube will run without a coverage report."
+          fi
 
       - name: SonarQube Scan
         if: ${{ env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
@@ -122,6 +145,8 @@ jobs:
             -Dsonar.projectKey=${{ github.event.repository.name }}
             -Dsonar.projectName=${{ github.event.repository.name }}
             -Dsonar.sources=app
+            -Dsonar.tests=tests
+            -Dsonar.test.inclusions=tests/**/*.py
             -Dsonar.python.version=3.12
             -Dsonar.python.coverage.reportPaths=coverage.xml
             -Dsonar.exclusions=**/__pycache__/**
