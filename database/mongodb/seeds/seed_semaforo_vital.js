@@ -58,9 +58,11 @@ const ALBERGUE_OPTIMO_ID =
     ObjectId("bbbbbbbbbbbbbbbbbbbbbbbb");
 
 
-// Fecha operativa normalizada a medianoche UTC.
+// Fecha operativa:
+// 2026-10-14 00:00:00 en America/Bogota (UTC-05:00)
+// MongoDB BSON Date representa ese instante como 05:00 UTC.
 const FECHA_SEED =
-    ISODate("2026-10-14T00:00:00.000Z");
+    ISODate("2026-10-14T05:00:00.000Z");
 
 
 // ============================================================
