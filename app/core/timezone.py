@@ -3,7 +3,6 @@ from zoneinfo import ZoneInfo
 
 from app.core.config import settings
 
-
 APP_TIMEZONE = ZoneInfo(settings.app_timezone)
 
 
