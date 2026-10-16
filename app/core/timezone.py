@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
 from app.core.config import settings
@@ -9,7 +9,7 @@ APP_TIMEZONE = ZoneInfo(settings.app_timezone)
 
 def now_colombia() -> datetime:
     """
-    Retorna el instante actual con zona horaria America/Bogota.
+    Retorna el instante actual con la zona horaria funcional configurada.
     """
     return datetime.now(APP_TIMEZONE)
 
@@ -26,12 +26,10 @@ def start_of_day_colombia(value: date | datetime) -> datetime:
     """
 
     if isinstance(value, datetime):
-
         if value.tzinfo is not None:
             target_date = value.astimezone(APP_TIMEZONE).date()
         else:
             target_date = value.date()
-
     else:
         target_date = value
 
@@ -44,14 +42,14 @@ def start_of_day_colombia(value: date | datetime) -> datetime:
 
 def to_colombia(value: datetime) -> datetime:
     """
-    Convierte un datetime a America/Bogota.
+    Convierte un datetime a la zona horaria funcional.
 
     Si MongoDB/PyMongo retorna un datetime sin tzinfo,
     se interpreta como UTC antes de realizar la conversión.
     """
 
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.replace(tzinfo=UTC)
 
     return value.astimezone(APP_TIMEZONE)
 
@@ -66,4 +64,4 @@ def to_utc(value: datetime) -> datetime:
             "El datetime debe incluir información de zona horaria."
         )
 
-    return value.astimezone(timezone.utc)
+    return value.astimezone(UTC)
