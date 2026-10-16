@@ -308,11 +308,12 @@ casos_ira   >= 0
 
 `fecha` representa el **día operativo del registro**.
 
-Debe normalizarse a medianoche UTC:
+Debe normalizarse a medianoche de la zona horaria funcional `America/Bogota`.
 
-```javascript
-ISODate("2026-10-14T00:00:00.000Z")
-```
+MongoDB almacena BSON Date como un instante UTC, por lo tanto:
+
+- Hora funcional Colombia: `2026-10-14 00:00:00 UTC-05:00`
+- Instante BSON equivalente: `ISODate("2026-10-14T05:00:00.000Z")`
 
 `created_at` representa el instante real en el que se crea el documento:
 

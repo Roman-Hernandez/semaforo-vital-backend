@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     mongodb_uri: str | None = None
     mongodb_db: str = "semaforo_vital"
 
+    app_timezone: str = "America/Bogota"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

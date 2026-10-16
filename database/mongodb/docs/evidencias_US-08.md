@@ -240,11 +240,12 @@ Se verificó adicionalmente que el mismo albergue puede registrar una fecha dife
 
 ### Normalización de fecha
 
-`fecha` representa el día operativo y se almacena normalizada a medianoche UTC:
+`fecha` representa el día operativo y se normaliza a las `00:00:00` de la zona horaria funcional `America/Bogota`.
 
-```javascript
-ISODate("2026-10-14T00:00:00.000Z")
-```
+MongoDB almacena BSON Date como un instante UTC, por lo que:
+
+- Fecha funcional: `2026-10-14 00:00:00 UTC-05:00`
+- Instante BSON equivalente: `ISODate("2026-10-14T05:00:00.000Z")`
 
 `created_at` conserva el instante real de creación.
 
