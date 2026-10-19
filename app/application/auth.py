@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.domain.ports.user_repository import UserRepository
 
 _passwords = PasswordHash.recommended()
-# This is a precomputed Argon2 hash used to equalize timing for unknown accounts.
+# Generated once per process to reduce timing differences for unknown users.
 _DUMMY_HASH = _passwords.hash("not-a-real-password")
 
 
@@ -32,6 +32,8 @@ def authenticate(repository: UserRepository, email: str, password: str) -> AuthT
         matches = False
     if not user or not matches or not user.active:
         raise InvalidCredentials()
+    if len(settings.jwt_secret_key) < 32:
+        raise RuntimeError("JWT_SECRET_KEY must contain at least 32 characters")
 
     now = datetime.now(timezone.utc)
     payload = {
