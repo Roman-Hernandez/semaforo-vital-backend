@@ -32,7 +32,7 @@ def user():
 
 
 def test_valid_credentials_return_expiring_jwt(monkeypatch, user):
-    monkeypatch.setattr(settings, "jwt_secret_key", "test-secret-for-automated-tests")
+    monkeypatch.setattr(settings, "jwt_secret_key", "test-secret-for-automated-tests-32-chars")
     token = authenticate(StubUserRepository(user), " Admin@Example.com ", "correct-horse-battery")
     claims = jwt.decode(token.access_token, settings.jwt_secret_key, algorithms=["HS256"])
     assert claims["sub"] == user.id
@@ -63,10 +63,10 @@ def test_login_api_returns_generic_401(monkeypatch):
     monkeypatch.setattr(MongoUserRepository, "find_by_email", lambda self, email: None)
     app.dependency_overrides[get_database_from_request] = lambda: SimpleNamespace()
     try:
-        with TestClient(app) as client:
-            response = client.post("/api/v1/auth/login", json={
-                "email": "admin@example.com", "password": "wrong"
-            })
+        client = TestClient(app)
+        response = client.post("/api/v1/auth/login", json={
+            "email": "admin@example.com", "password": "wrong"
+        })
         assert response.status_code == 401
         assert response.json() == {"detail": "Credenciales inválidas"}
     finally:
