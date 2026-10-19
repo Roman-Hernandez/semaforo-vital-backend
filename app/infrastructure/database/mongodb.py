@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pymongo import MongoClient
 from pymongo.database import Database
 
@@ -11,6 +11,8 @@ from app.core.config import settings
 async def mongodb_lifespan(app: FastAPI):
     if not settings.mongodb_uri:
         raise RuntimeError("MONGODB_URI must be configured")
+    if len(settings.jwt_secret_key) < 32:
+        raise RuntimeError("JWT_SECRET_KEY must contain at least 32 characters")
     client: MongoClient = MongoClient(
         settings.mongodb_uri,
         serverSelectionTimeoutMS=5000,
@@ -24,10 +26,5 @@ async def mongodb_lifespan(app: FastAPI):
         client.close()
 
 
-def get_database() -> Database:
-    from fastapi import Request
-    raise RuntimeError("Use get_database_from_request as a FastAPI dependency")
-
-
-def get_database_from_request(request):
+def get_database_from_request(request: Request) -> Database:
     return request.app.state.mongodb
