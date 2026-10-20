@@ -18,7 +18,9 @@ class MongoUserRepository:
             active=bool(document["active"]),
             nombre=document.get("nombre"),
             apellido=document.get("apellido"),
-            albergue_id=str(document["albergue_id"]) if document.get("albergue_id") else None,
+            albergue_id=(
+                str(document["albergue_id"]) if document.get("albergue_id") else None
+            ),
         )
 
     def find_by_email(self, email: str) -> User | None:

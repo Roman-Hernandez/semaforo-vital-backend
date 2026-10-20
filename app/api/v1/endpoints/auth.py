@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field, SecretStr
@@ -22,7 +23,7 @@ class LoginResponse(BaseModel):
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: LoginRequest,
-    use_case: AuthenticateUserUseCase = Depends(get_auth_use_case),
+    use_case: Annotated[AuthenticateUserUseCase, Depends(get_auth_use_case)],
 ):
     try:
         token = use_case.execute(

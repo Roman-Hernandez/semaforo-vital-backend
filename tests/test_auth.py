@@ -1,13 +1,19 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 import jwt
 import pytest
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
 
-from app.api.deps import get_auth_use_case, get_current_user, get_user_repository, require_role
+from app.api.deps import (
+    get_auth_use_case,
+    get_current_user,
+    get_user_repository,
+    require_role,
+)
 from app.application.auth import (
     AuthenticateUserUseCase,
     InvalidCredentials,
@@ -19,7 +25,8 @@ from app.application.auth import (
 from app.core.config import settings
 from app.domain.users import User, UserRole
 from app.infrastructure.repositories.mongo_user_repository import MongoUserRepository
-from app.main import app
+from app.main import _request_hits, app
+from database.mongodb.seeds.seed_admin import seed_superadmin
 
 TEST_SECRET = "test-secret-key-that-has-at-least-32-characters"
 
@@ -65,7 +72,9 @@ def test_valid_credentials_return_expiring_jwt(monkeypatch, user):
 
 def test_authenticate_helper_function(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
-    token = authenticate(StubUserRepository(user), "admin@example.com", "correct-horse-battery")
+    token = authenticate(
+        StubUserRepository(user), "admin@example.com", "correct-horse-battery"
+    )
     assert token.access_token is not None
 
 
@@ -100,7 +109,9 @@ def test_short_jwt_secret_rejected(monkeypatch, user):
 
 def test_decode_valid_token(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
-    token = authenticate(StubUserRepository(user), "admin@example.com", "correct-horse-battery")
+    token = authenticate(
+        StubUserRepository(user), "admin@example.com", "correct-horse-battery"
+    )
     payload = decode_access_token(token.access_token)
     assert payload["sub"] == user.id
     assert payload["role"] == "administrador_albergue"
@@ -111,8 +122,8 @@ def test_decode_expired_token(monkeypatch):
     expired_payload = {
         "sub": "user123",
         "role": "administrador_albergue",
-        "iat": datetime.now(timezone.utc) - timedelta(hours=2),
-        "exp": datetime.now(timezone.utc) - timedelta(hours=1),
+        "iat": datetime.now(UTC) - timedelta(hours=2),
+        "exp": datetime.now(UTC) - timedelta(hours=1),
     }
     expired_token = jwt.encode(expired_payload, TEST_SECRET, algorithm="HS256")
     with pytest.raises(TokenExpiredError):
@@ -121,7 +132,9 @@ def test_decode_expired_token(monkeypatch):
 
 def test_decode_tampered_token(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
-    token = authenticate(StubUserRepository(user), "admin@example.com", "correct-horse-battery")
+    token = authenticate(
+        StubUserRepository(user), "admin@example.com", "correct-horse-battery"
+    )
     tampered_token = token.access_token[:-4] + "xxxx"
     with pytest.raises(InvalidTokenError):
         decode_access_token(tampered_token)
@@ -201,7 +214,9 @@ def test_mongo_user_repository_not_found():
 
 def test_login_api_success_200(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
-    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(StubUserRepository(user))
+    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(
+        StubUserRepository(user)
+    )
     try:
         client = TestClient(app)
         response = client.post("/api/v1/auth/login", json={
@@ -227,7 +242,9 @@ def test_login_api_success_200(monkeypatch, user):
 )
 def test_login_api_invalid_credentials_returns_401(monkeypatch, user, email, password):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
-    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(StubUserRepository(user))
+    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(
+        StubUserRepository(user)
+    )
     try:
         client = TestClient(app)
         response = client.post("/api/v1/auth/login", json={
@@ -244,7 +261,9 @@ def test_login_api_invalid_credentials_returns_401(monkeypatch, user, email, pas
 def test_login_api_inactive_account_returns_401(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
     inactive_user = User(**{**vars(user), "active": False})
-    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(StubUserRepository(inactive_user))
+    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(
+        StubUserRepository(inactive_user)
+    )
     try:
         client = TestClient(app)
         response = client.post("/api/v1/auth/login", json={
@@ -258,7 +277,9 @@ def test_login_api_inactive_account_returns_401(monkeypatch, user):
 
 
 def test_login_api_validation_error_422():
-    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(StubUserRepository())
+    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(
+        StubUserRepository()
+    )
     try:
         client = TestClient(app)
         # Formato de correo inválido
@@ -286,8 +307,6 @@ def test_login_api_validation_error_422():
 
 
 def test_rate_limit_middleware_blocks_excess_requests(monkeypatch):
-    from app.main import _request_hits
-
     _request_hits.clear()
     monkeypatch.setattr(settings, "rate_limit_requests", 2)
     monkeypatch.setattr(settings, "rate_limit_window_seconds", 60)
@@ -314,12 +333,14 @@ def public_route():
 
 
 @demo_router.get("/private")
-def private_route(current_user: User = Depends(get_current_user)):
+def private_route(current_user: Annotated[User, Depends(get_current_user)]):
     return {"user_id": current_user.id, "email": current_user.email}
 
 
 @demo_router.get("/super-admin-only")
-def super_admin_route(current_user: User = Depends(require_role(UserRole.SUPER_ADMIN))):
+def super_admin_route(
+    current_user: Annotated[User, Depends(require_role(UserRole.SUPER_ADMIN))],
+):
     return {"admin": True}
 
 
@@ -349,7 +370,9 @@ def test_private_route_with_valid_token_returns_user(monkeypatch, user):
     app.dependency_overrides[get_user_repository] = lambda: StubUserRepository(user)
     try:
         client = TestClient(app)
-        token = authenticate(StubUserRepository(user), "admin@example.com", "correct-horse-battery")
+        token = authenticate(
+            StubUserRepository(user), "admin@example.com", "correct-horse-battery"
+        )
         response = client.get(
             "/demo-auth/private",
             headers={"Authorization": f"Bearer {token.access_token}"},
@@ -363,10 +386,14 @@ def test_private_route_with_valid_token_returns_user(monkeypatch, user):
 def test_private_route_with_inactive_user_returns_401(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
     inactive_user = User(**{**vars(user), "active": False})
-    app.dependency_overrides[get_user_repository] = lambda: StubUserRepository(inactive_user)
+    app.dependency_overrides[get_user_repository] = lambda: StubUserRepository(
+        inactive_user
+    )
     try:
         client = TestClient(app)
-        token = authenticate(StubUserRepository(user), "admin@example.com", "correct-horse-battery")
+        token = authenticate(
+            StubUserRepository(user), "admin@example.com", "correct-horse-battery"
+        )
         response = client.get(
             "/demo-auth/private",
             headers={"Authorization": f"Bearer {token.access_token}"},
@@ -383,7 +410,9 @@ def test_role_restricted_route(monkeypatch, user):
     app.dependency_overrides[get_user_repository] = lambda: StubUserRepository(user)
     try:
         client = TestClient(app)
-        token = authenticate(StubUserRepository(user), "admin@example.com", "correct-horse-battery")
+        token = authenticate(
+            StubUserRepository(user), "admin@example.com", "correct-horse-battery"
+        )
         response = client.get(
             "/demo-auth/super-admin-only",
             headers={"Authorization": f"Bearer {token.access_token}"},
@@ -398,8 +427,6 @@ def test_role_restricted_route(monkeypatch, user):
 
 
 def test_seed_superadmin_invalid_inputs():
-    from database.mongodb.seeds.seed_admin import seed_superadmin
-
     with pytest.raises(ValueError, match="Email inválido"):
         seed_superadmin(email="bad-email", password="valid-password-123")
 

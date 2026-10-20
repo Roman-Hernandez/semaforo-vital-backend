@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from pwdlib import PasswordHash
@@ -63,14 +63,15 @@ class AuthenticateUserUseCase:
         if len(settings.jwt_secret_key) < 32:
             raise RuntimeError("JWT_SECRET_KEY must contain at least 32 characters")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "sub": user.id,
             "role": user.role.value,
             "iat": now,
             "exp": now + timedelta(minutes=settings.jwt_access_token_minutes),
         }
-        return AuthToken(access_token=jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256"))
+        encoded = jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
+        return AuthToken(access_token=encoded)
 
 
 def authenticate(repository: UserRepository, email: str, password: str) -> AuthToken:

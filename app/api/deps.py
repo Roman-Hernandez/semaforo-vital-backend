@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -23,20 +24,20 @@ def get_database(request: Request) -> Database:
 
 
 def get_user_repository(
-    database: Database = Depends(get_database),
+    database: Annotated[Database, Depends(get_database)],
 ) -> UserRepository:
     return MongoUserRepository(database)
 
 
 def get_auth_use_case(
-    user_repository: UserRepository = Depends(get_user_repository),
+    user_repository: Annotated[UserRepository, Depends(get_user_repository)],
 ) -> AuthenticateUserUseCase:
     return AuthenticateUserUseCase(user_repository)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
-    user_repository: UserRepository = Depends(get_user_repository),
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(http_bearer)],
+    user_repository: Annotated[UserRepository, Depends(get_user_repository)],
 ) -> User:
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(
@@ -77,8 +78,10 @@ def get_current_user(
 
 
 def require_role(required_role: UserRole) -> Callable[[User], User]:
-    def role_checker(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role != required_role and current_user.role != UserRole.SUPER_ADMIN:
+    def role_checker(
+        current_user: Annotated[User, Depends(get_current_user)],
+    ) -> User:
+        if current_user.role not in (required_role, UserRole.SUPER_ADMIN):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Permisos insuficientes",
