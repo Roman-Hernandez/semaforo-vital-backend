@@ -46,4 +46,18 @@ db.usuarios.createIndex({ email: 1 }, {
 db.usuarios.createIndex({ albergue_id: 1 }, {
   name: "ix_usuarios_albergue_id"
 });
-print("US-12 usuarios: validador e índices listos.");
+
+// Registrar migración de forma idempotente sin framework complejo
+db.schema_migrations.updateOne(
+  { version: "002_create_usuarios" },
+  {
+    $setOnInsert: {
+      version: "002_create_usuarios",
+      description: "Crear colección usuarios, validadores e índices para autenticación",
+      executed_at: new Date()
+    }
+  },
+  { upsert: true }
+);
+
+print("US-12 usuarios: validador, índices y registro de migración listos.");

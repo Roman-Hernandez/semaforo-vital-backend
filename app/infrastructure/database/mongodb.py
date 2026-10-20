@@ -27,4 +27,7 @@ async def mongodb_lifespan(app: FastAPI):
 
 
 def get_database_from_request(request: Request) -> Database:
-    return request.app.state.mongodb
+    db = getattr(request.app.state, "mongodb", None)
+    if db is None:
+        raise RuntimeError("Database connection not initialized")
+    return db

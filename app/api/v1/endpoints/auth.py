@@ -1,19 +1,17 @@
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
-from pymongo.database import Database
+from pydantic import BaseModel, EmailStr, Field, SecretStr
 
-from app.application.auth import InvalidCredentials, authenticate
-from app.infrastructure.database.mongodb import get_database_from_request
-from app.infrastructure.repositories.mongo_user_repository import MongoUserRepository
+from app.api.deps import get_auth_use_case
+from app.application.auth import AuthenticateUserUseCase, InvalidCredentials
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=1)
+    password: SecretStr = Field(min_length=1, max_length=128)
 
 
 class LoginResponse(BaseModel):
@@ -22,10 +20,15 @@ class LoginResponse(BaseModel):
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(payload: LoginRequest, database: Database = Depends(get_database_from_request)):
-    repository = MongoUserRepository(database)
+def login(
+    payload: LoginRequest,
+    use_case: AuthenticateUserUseCase = Depends(get_auth_use_case),
+):
     try:
-        token = authenticate(repository, payload.email, payload.password)
+        token = use_case.execute(
+            payload.email,
+            payload.password.get_secret_value(),
+        )
     except InvalidCredentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

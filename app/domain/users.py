@@ -14,3 +14,6 @@ class User:
     password_hash: str
     role: UserRole
     active: bool
+    nombre: str | None = None
+    apellido: str | None = None
+    albergue_id: str | None = None
