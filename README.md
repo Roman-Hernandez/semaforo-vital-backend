@@ -21,6 +21,19 @@ Estructura inicial de backend en Python con FastAPI y arquitectura en capas.
 uvicorn app.main:app --reload
 ```
 
+## Migraciones y Seeder (MongoDB)
+
+```bash
+# Ejecutar migraciones
+python -m database.mongodb.migrate
+
+# Crear superadministrador inicial
+python -m database.mongodb.seeds.seed_admin
+
+# Actualizar contraseña de superadministrador existente
+python -m database.mongodb.seeds.seed_admin --reset
+```
+
 ## Ejecución con Docker
 
 ```bash
