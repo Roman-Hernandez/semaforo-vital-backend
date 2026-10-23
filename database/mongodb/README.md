@@ -643,3 +643,173 @@ CA-05  rechazo de valores negativos   CUMPLE
 ```
 
 La infraestructura documental necesaria para iniciar integración y pruebas del backend se encuentra implementada en MongoDB Atlas y es reproducible desde los scripts versionados en el repositorio.
+
+## Ajustes QA posteriores a la US-08
+
+Como resultado de la revisión QA, se fortaleció el modelo de datos MongoDB sin reconstruir las colecciones existentes.
+
+### Colección usuarios
+
+La colección `usuarios` fue incorporada mediante la migración:
+
+`002_create_usuarios.js`
+
+El contrato vigente utiliza:
+
+- `email`
+- `password_hash`
+- `role`
+- `active`
+- `nombre`
+- `apellido`
+- `albergue_id`
+- `created_at`
+- `updated_at`
+- `last_login_at`
+
+Roles soportados:
+
+- `super_administrador`
+- `administrador_albergue`
+
+El correo debe almacenarse normalizado en minúsculas.
+
+El campo `password_hash` utiliza Argon2id y nunca debe contener contraseñas en texto plano.
+
+### Integridad e índices
+
+La migración:
+
+`003_harden_data_integrity.js`
+
+incorporó y validó:
+
+- índice único de `usuarios.email`;
+- índice de `usuarios.albergue_id`;
+- índice único de `albergues.codigo_albergue`;
+- índice único compuesto de `registros_diarios.albergue_id + fecha`;
+- índice único de `schema_migrations.version`;
+- validaciones de roles y asociación de usuarios a albergues;
+- validación del formato Argon2id;
+- normalización de correo.
+
+MongoDB no aplica claves foráneas entre colecciones.
+
+Las referencias:
+
+`albergues.registrado_por → usuarios._id`
+
+`registros_diarios.registrado_por → usuarios._id`
+
+`registros_diarios.albergue_id → albergues._id`
+
+`usuarios.albergue_id → albergues._id`
+
+deben validarse desde la capa de aplicación y mediante controles DBA.
+
+### Trazabilidad
+
+La migración:
+
+`004_add_update_traceability.js`
+
+incorporó en `albergues` y `registros_diarios` los campos opcionales:
+
+- `updated_at`
+- `updated_by`
+
+`created_at` conserva siempre la fecha original de creación.
+
+`registrado_por` identifica al usuario creador.
+
+`updated_at` y `updated_by` representan la última modificación cuando exista.
+
+No se agregan valores artificiales a documentos históricos.
+
+### Registros diarios
+
+Existe un único registro consolidado por:
+
+`albergue_id + fecha`
+
+El índice:
+
+`ux_registros_diarios_albergue_fecha`
+
+garantiza dicha unicidad.
+
+Los campos:
+
+- `casos_eda`
+- `casos_ira`
+
+representan casos nuevos reportados durante el día y no valores acumulados.
+
+### Zona horaria funcional
+
+La zona horaria funcional del proyecto es:
+
+`America/Bogota`
+
+Una fecha funcional:
+
+`2026-10-14 00:00:00 America/Bogota`
+
+se persiste en MongoDB como:
+
+`ISODate("2026-10-14T05:00:00.000Z")`
+
+### Datos semilla
+
+`seed_semaforo_vital.js` fue actualizado para no utilizar usuarios ficticios.
+
+El script busca un:
+
+`super_administrador`
+
+con:
+
+`active = true`
+
+y utiliza su `_id` real como `registrado_por`.
+
+El seed puede ejecutarse repetidamente sin generar duplicados.
+
+### Pruebas QA
+
+El archivo:
+
+`database/mongodb/tests/test_integridad_qa.js`
+
+valida:
+
+- usuario válido;
+- correo duplicado;
+- correo no normalizado;
+- hash no Argon2id;
+- rol inválido;
+- administrador de albergue sin `albergue_id`;
+- superadministrador asociado incorrectamente a un albergue;
+- código de albergue duplicado;
+- registro diario duplicado;
+- tipo inválido de `updated_by`;
+- detección de referencias huérfanas;
+- limpieza de datos temporales.
+
+Resultado esperado:
+
+`12 pruebas exitosas`
+
+`0 pruebas fallidas`
+
+### Reproducibilidad
+
+El archivo:
+
+`init_semaforo_vital.js`
+
+representa el estado estructural vigente de la base de datos.
+
+Puede ejecutarse repetidamente mediante `collMod` y `createIndex` sin generar duplicados.
+
+Las migraciones históricas permanecen versionadas e inmutables.
