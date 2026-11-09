@@ -11,6 +11,7 @@ Su objetivo es evitar inconsistencias durante la integración del backend, espec
 - fechas operativas;
 - trazabilidad;
 - registros diarios;
+- condiciones sanitarias;
 - casos EDA e IRA;
 - evolución futura de los esquemas.
 
@@ -27,6 +28,7 @@ Actualmente el modelo operativo utiliza las siguientes colecciones:
 - `usuarios`
 - `albergues`
 - `registros_diarios`
+- `condiciones_sanitarias`
 - `schema_migrations`
 
 La colección conceptual solicitada inicialmente como `users` fue implementada por backend como `usuarios`.
@@ -397,6 +399,15 @@ registros_diarios.albergue_id
 
 usuarios.albergue_id
     → albergues._id
+
+condiciones_sanitarias.albergue_id
+    → albergues._id
+
+condiciones_sanitarias.registrado_por
+    → usuarios._id
+
+condiciones_sanitarias.updated_by
+    → usuarios._id
 ```
 
 Los validadores `$jsonSchema` garantizan los tipos de datos.
@@ -443,6 +454,7 @@ Los esquemas de:
 
 - `albergues`
 - `registros_diarios`
+- `condiciones_sanitarias`
 
 permiten los campos opcionales:
 
@@ -552,7 +564,26 @@ Registro consolidado único por albergue y día:
 
 `ux_registros_diarios_albergue_fecha`
 
-## 11.4 `schema_migrations`
+## 11.4 `condiciones_sanitarias`
+
+Consulta temporal por albergue:
+
+`ix_condiciones_sanitarias_albergue_fecha`
+
+Estructura:
+
+```javascript
+{
+    albergue_id: 1,
+    fecha: -1
+}
+```
+
+El índice no es único.
+
+Actualmente no existe una regla funcional aprobada que limite la colección a un único registro de condiciones sanitarias por albergue y día.
+
+## 11.5 `schema_migrations`
 
 Versión de migración única:
 
@@ -571,6 +602,7 @@ Actualmente existen:
 002_create_usuarios.js
 003_harden_data_integrity.js
 004_add_update_traceability.js
+005_create_condiciones_sanitarias.js
 ```
 
 La migración `001` fue ejecutada antes de la creación del mecanismo `schema_migrations`.
@@ -584,6 +616,12 @@ Las migraciones posteriores deben registrarse mediante:
 `schema_migrations`
 
 y utilizar versiones únicas.
+
+La migración:
+
+`005_create_condiciones_sanitarias.js`
+
+incorpora la colección `condiciones_sanitarias`, su validador `$jsonSchema`, el índice `ix_condiciones_sanitarias_albergue_fecha` y controles DBA para detectar referencias huérfanas.
 
 ---
 
@@ -665,6 +703,24 @@ Las migraciones deben poder ejecutarse repetidamente sin generar registros dupli
 
 Los seeds también deben ser reejecutables.
 
+`init_semaforo_vital.js` representa el estado estructural vigente de la base de datos.
+
+Actualmente administra:
+
+```text
+usuarios
+albergues
+registros_diarios
+condiciones_sanitarias
+schema_migrations
+```
+
+Cuando una colección no existe, el script puede crearla.
+
+Cuando ya existe, utiliza `collMod` para actualizar el validador correspondiente.
+
+Los índices se crean o verifican de forma reejecutable.
+
 ---
 
 # 16. Responsabilidades por capa
@@ -679,12 +735,14 @@ MongoDB y los componentes DBA garantizan:
 - roles permitidos;
 - formato de email;
 - formato esperado de `password_hash`;
-- índices únicos;
+- índices únicos cuando existe una regla funcional de unicidad;
+- índices de consulta;
 - estructura de documentos;
 - compatibilidad mediante migraciones;
 - seeds reproducibles;
 - controles de referencias huérfanas;
-- pruebas de integridad del modelo.
+- pruebas de integridad del modelo;
+- inicialización reproducible.
 
 ## 16.2 Aplicación / Backend
 
@@ -699,6 +757,7 @@ La aplicación debe garantizar:
 - asignación correcta de `updated_at`;
 - asignación correcta de `updated_by`;
 - protección funcional de `created_at`;
+- protección funcional de `registrado_por`;
 - manejo de errores por duplicidad e integridad.
 
 ---
@@ -727,6 +786,36 @@ MongoDB puede aceptar un `ObjectId` estructuralmente válido aunque el documento
 
 Por esta razón, las pruebas demuestran que el control DBA mediante `$lookup` detecta la inconsistencia.
 
+Para la colección `condiciones_sanitarias` existe adicionalmente:
+
+`database/mongodb/tests/test_condiciones_sanitarias.js`
+
+La suite valida:
+
+- inserción de un documento válido;
+- obligatoriedad de `albergue_id`;
+- obligatoriedad de `fecha`;
+- rechazo de `banos_disponibles` negativos;
+- tipo Boolean de `agua_potable_disponible`;
+- rechazo de `estado_higiene` vacío;
+- obligatoriedad de `estado_saneamiento`;
+- obligatoriedad de `fuente_datos`;
+- rechazo de cantidades negativas en recursos sanitarios;
+- rechazo de propiedades no definidas;
+- tipo `ObjectId` de `registrado_por`;
+- trazabilidad mediante `updated_at` y `updated_by`;
+- existencia del índice `ix_condiciones_sanitarias_albergue_fecha`;
+- detección DBA de referencias huérfanas.
+
+Resultado validado:
+
+```text
+Pruebas exitosas: 14
+Pruebas fallidas: 0
+```
+
+Los documentos temporales utilizados durante las pruebas son eliminados al finalizar.
+
 ---
 
 # 18. Regla general
@@ -750,3 +839,294 @@ debe realizarse mediante:
 3. pruebas;
 4. documentación;
 5. coordinación entre DBA y backend.
+
+---
+
+# 19. Colección `condiciones_sanitarias`
+
+## 19.1 Propósito
+
+`condiciones_sanitarias` almacena información sobre las condiciones sanitarias observadas en un albergue para una fecha determinada.
+
+La colección complementa la información existente en `registros_diarios`.
+
+No reemplaza `registros_diarios` ni debe utilizarse para duplicar los datos consolidados almacenados en dicha colección.
+
+---
+
+## 19.2 Documento válido
+
+Ejemplo:
+
+```javascript
+{
+    _id: ObjectId("..."),
+
+    albergue_id: ObjectId("..."),
+
+    fecha: ISODate("..."),
+
+    agua_potable_disponible: true,
+
+    banos_disponibles: NumberInt(6),
+
+    estado_higiene: "adecuado",
+
+    estado_saneamiento: "operativo",
+
+    otros_recursos_sanitarios: [
+        {
+            nombre: "lavamanos",
+            cantidad: NumberInt(4),
+            observacion: "Disponibles"
+        }
+    ],
+
+    observaciones: "Sin novedades",
+
+    fuente_datos: "registro_manual",
+
+    registrado_por: ObjectId("..."),
+
+    created_at: ISODate("..."),
+
+    updated_at: ISODate("..."),
+
+    updated_by: ObjectId("...")
+}
+```
+
+---
+
+## 19.3 Campos obligatorios
+
+Son obligatorios:
+
+```text
+albergue_id
+fecha
+agua_potable_disponible
+banos_disponibles
+estado_higiene
+estado_saneamiento
+fuente_datos
+registrado_por
+created_at
+```
+
+Son opcionales:
+
+```text
+otros_recursos_sanitarios
+observaciones
+updated_at
+updated_by
+```
+
+---
+
+## 19.4 Reglas de validación
+
+`albergue_id`
+
+Debe ser de tipo `ObjectId`.
+
+`fecha`
+
+Debe ser de tipo `Date`.
+
+`agua_potable_disponible`
+
+Debe ser de tipo Boolean.
+
+`banos_disponibles`
+
+Debe ser un entero mayor o igual a cero.
+
+`estado_higiene`
+
+Debe ser una cadena no vacía.
+
+`estado_saneamiento`
+
+Debe ser una cadena no vacía.
+
+`fuente_datos`
+
+Debe ser una cadena no vacía.
+
+Los catálogos funcionales definitivos para:
+
+```text
+estado_higiene
+estado_saneamiento
+fuente_datos
+```
+
+se encuentran pendientes de definición funcional.
+
+Por esta razón, el `$jsonSchema` vigente valida que los valores sean cadenas no vacías, pero no utiliza todavía restricciones `enum`.
+
+Estos catálogos no deben establecerse unilateralmente desde la capa de base de datos.
+
+---
+
+## 19.5 Otros recursos sanitarios
+
+`otros_recursos_sanitarios` es opcional.
+
+Cuando exista, debe ser un arreglo de documentos con la estructura:
+
+```javascript
+{
+    nombre: String,
+    cantidad: Int32,
+    observacion: String
+}
+```
+
+Son obligatorios dentro de cada elemento:
+
+```text
+nombre
+cantidad
+```
+
+`nombre` debe ser una cadena no vacía.
+
+`cantidad` debe ser un entero mayor o igual a cero.
+
+`observacion` es opcional.
+
+No se permiten propiedades adicionales dentro de cada recurso sanitario.
+
+---
+
+## 19.6 Referencias lógicas
+
+Las relaciones vigentes son:
+
+```text
+condiciones_sanitarias.albergue_id
+    → albergues._id
+
+condiciones_sanitarias.registrado_por
+    → usuarios._id
+
+condiciones_sanitarias.updated_by
+    → usuarios._id
+```
+
+MongoDB `$jsonSchema` garantiza que estas referencias tengan tipo `ObjectId`, pero no puede garantizar por sí mismo que el documento relacionado exista.
+
+La aplicación debe validar la existencia de las referencias antes de persistir información.
+
+Los controles DBA utilizan `$lookup` para detectar referencias huérfanas.
+
+---
+
+## 19.7 Trazabilidad
+
+`registrado_por`
+
+Identifica al usuario responsable de la creación original del documento.
+
+`created_at`
+
+Representa la fecha y hora técnica original de creación y no debe modificarse posteriormente.
+
+Cuando el documento sea actualizado pueden utilizarse:
+
+```text
+updated_at
+updated_by
+```
+
+`updated_at` representa el instante de la última modificación.
+
+`updated_by` debe corresponder al `_id` del usuario responsable de dicha modificación.
+
+---
+
+## 19.8 Índice
+
+La colección utiliza:
+
+`ix_condiciones_sanitarias_albergue_fecha`
+
+sobre:
+
+```javascript
+{
+    albergue_id: 1,
+    fecha: -1
+}
+```
+
+El índice acelera las consultas históricas y temporales de condiciones sanitarias por albergue.
+
+No es un índice único.
+
+Actualmente no existe una regla funcional aprobada que limite la colección a un único documento por albergue y día.
+
+---
+
+## 19.9 Migración
+
+La colección fue incorporada mediante:
+
+`005_create_condiciones_sanitarias.js`
+
+La migración:
+
+- crea la colección cuando no existe;
+- actualiza el validador cuando la colección ya existe;
+- crea o verifica el índice requerido;
+- comprueba referencias lógicas existentes;
+- registra su ejecución en `schema_migrations`;
+- verifica que la migración quede registrada una sola vez.
+
+La migración aplicada no debe modificarse retroactivamente.
+
+---
+
+## 19.10 Inicialización reproducible
+
+`init_semaforo_vital.js` representa actualmente el estado estructural vigente de esta colección.
+
+En una instalación nueva puede crear `condiciones_sanitarias`.
+
+En una instalación existente utiliza `collMod` para garantizar que el validador vigente corresponda al contrato actual.
+
+La ejecución repetida del `init` no debe duplicar documentos ni índices.
+
+---
+
+## 19.11 Pruebas DBA
+
+El archivo:
+
+`database/mongodb/tests/test_condiciones_sanitarias.js`
+
+contiene la suite específica de validación de esta colección.
+
+Resultado obtenido:
+
+```text
+Pruebas exitosas: 14
+Pruebas fallidas: 0
+```
+
+Las pruebas comprueban:
+
+- documento válido;
+- campos obligatorios;
+- tipos BSON;
+- valores negativos;
+- propiedades adicionales;
+- estructura de recursos sanitarios;
+- trazabilidad de actualización;
+- existencia del índice;
+- detección de referencias huérfanas.
+
+Las pruebas fueron ejecutadas nuevamente después de actualizar `init_semaforo_vital.js`, confirmando que la inicialización reproducible conserva correctamente las restricciones definidas para la colección.
