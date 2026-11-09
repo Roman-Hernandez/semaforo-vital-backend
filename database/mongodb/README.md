@@ -1,10 +1,12 @@
 # MongoDB - Semáforo Vital
 
-## US-08 - Implementación de validadores, índices y datos semilla
+## Infraestructura de persistencia MongoDB
 
-Este directorio contiene la infraestructura MongoDB implementada para la US-08 del proyecto **Semáforo Vital**.
+Este directorio contiene la infraestructura MongoDB del proyecto **Semáforo Vital**.
 
-La solución utiliza **MongoDB Atlas** como motor documental persistente y scripts versionados dentro del repositorio backend para garantizar que la estructura pueda reproducirse de forma controlada.
+La implementación inicial fue desarrollada en la US-08 y posteriormente ha evolucionado mediante migraciones versionadas, validadores, índices, controles de integridad y pruebas DBA.
+
+La solución utiliza **MongoDB Atlas** como motor documental persistente y scripts versionados dentro del repositorio backend para garantizar que la estructura pueda reproducirse y evolucionar de forma controlada.
 
 ---
 
@@ -23,6 +25,12 @@ semaforo-vital-dev
 ## Colecciones implementadas
 
 ```text
+usuarios
+albergues
+registros_diarios
+condiciones_sanitarias
+schema_migrations
+```text
 albergues
 registros_diarios
 ```
@@ -36,12 +44,23 @@ database/
 └── mongodb/
     ├── init/
     │   └── init_semaforo_vital.js
+    ├── migrations/
+    │   ├── 001_fix_colombia_timezone.js
+    │   ├── 002_create_usuarios.js
+    │   ├── 003_harden_data_integrity.js
+    │   ├── 004_add_update_traceability.js
+    │   └── 005_create_condiciones_sanitarias.js
     ├── seeds/
+    │   ├── seed_admin.py
     │   └── seed_semaforo_vital.js
     ├── tests/
-    │   └── test_validaciones.js
+    │   ├── test_validaciones.js
+    │   ├── test_integridad_qa.js
+    │   └── test_condiciones_sanitarias.js
     ├── docs/
-    │   └── evidencias_US-08.md
+    │   ├── evidencias_US-08.md
+    │   └── contrato_datos_backend.md
+    ├── migrate.py
     └── README.md
 ```
 
