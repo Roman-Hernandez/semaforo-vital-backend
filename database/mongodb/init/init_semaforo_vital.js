@@ -9,6 +9,7 @@
 //   - albergues
 //   - registros_diarios
 //   - condiciones_sanitarias
+//   - casos_enfermedades
 //   - schema_migrations
 //
 // Responsabilidad:
@@ -677,7 +678,120 @@ const validatorCondicionesSanitarias = {
 
 
 // ============================================================
-// 5. FUNCIÓN IDEMPOTENTE DE CREACIÓN / ACTUALIZACIÓN
+// 5. VALIDADOR - CASOS DE ENFERMEDADES
+// ============================================================
+
+const validatorCasosEnfermedades = {
+    $jsonSchema: {
+
+        bsonType: "object",
+
+        title:
+            "Esquema de validación de casos de enfermedades",
+
+        additionalProperties: false,
+
+        required: [
+            "albergue_id",
+            "fecha",
+            "enfermedad",
+            "cantidad_casos_activos",
+            "fuente_datos",
+            "registrado_por",
+            "created_at"
+        ],
+
+        properties: {
+
+            _id: {
+                bsonType: "objectId",
+
+                description:
+                    "Identificador único del registro"
+            },
+
+            albergue_id: {
+                bsonType: "objectId",
+
+                description:
+                    "Referencia lógica a albergues._id"
+            },
+
+            fecha: {
+                bsonType: "date",
+
+                description:
+                    "Fecha funcional del registro epidemiológico"
+            },
+
+            enfermedad: {
+                bsonType: "string",
+
+                minLength: 1,
+
+                description:
+                    "Enfermedad registrada. Catálogo funcional pendiente de definición"
+            },
+
+            cantidad_casos_activos: {
+                bsonType: "int",
+
+                minimum: 0,
+
+                description:
+                    "Cantidad de casos activos de la enfermedad en la fecha del registro"
+            },
+
+            observaciones: {
+                bsonType: "string",
+
+                description:
+                    "Observaciones adicionales del registro epidemiológico"
+            },
+
+            fuente_datos: {
+                bsonType: "string",
+
+                minLength: 1,
+
+                description:
+                    "Origen del dato. Catálogo funcional pendiente de definición"
+            },
+
+            registrado_por: {
+                bsonType: "objectId",
+
+                description:
+                    "Referencia lógica al usuario responsable de la creación"
+            },
+
+            created_at: {
+                bsonType: "date",
+
+                description:
+                    "Fecha y hora técnica original de creación"
+            },
+
+            updated_at: {
+                bsonType: "date",
+
+                description:
+                    "Fecha y hora de la última modificación"
+            },
+
+            updated_by: {
+                bsonType: "objectId",
+
+                description:
+                    "Referencia lógica al usuario responsable de la última modificación"
+            }
+        }
+    }
+};
+
+
+// ============================================================
+// 6. FUNCIÓN IDEMPOTENTE DE CREACIÓN / ACTUALIZACIÓN
 // ============================================================
 
 function crearOActualizarColeccion(
@@ -751,7 +865,7 @@ function crearOActualizarColeccion(
 
 
 // ============================================================
-// 6. CREAR / ACTUALIZAR COLECCIONES
+// 7. CREAR / ACTUALIZAR COLECCIONES
 // ============================================================
 
 crearOActualizarColeccion(
@@ -778,8 +892,14 @@ crearOActualizarColeccion(
 );
 
 
+crearOActualizarColeccion(
+    "casos_enfermedades",
+    validatorCasosEnfermedades
+);
+
+
 // ============================================================
-// 7. SCHEMA MIGRATIONS
+// 8. SCHEMA MIGRATIONS
 // ============================================================
 
 if (
@@ -807,7 +927,7 @@ if (
 
 
 // ============================================================
-// 8. ÍNDICES
+// 9. ÍNDICES
 // ============================================================
 
 print("");
@@ -815,7 +935,7 @@ print("Configurando índices...");
 
 
 // ------------------------------------------------------------
-// 8.1 usuarios.email único
+// 9.1 usuarios.email único
 // ------------------------------------------------------------
 
 db.usuarios.createIndex(
@@ -837,7 +957,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 8.2 usuarios.albergue_id
+// 9.2 usuarios.albergue_id
 // ------------------------------------------------------------
 
 db.usuarios.createIndex(
@@ -856,7 +976,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 8.3 albergues.codigo_albergue único
+// 9.3 albergues.codigo_albergue único
 // ------------------------------------------------------------
 
 db.albergues.createIndex(
@@ -878,7 +998,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 8.4 registro consolidado por albergue + día
+// 9.4 registros_diarios por albergue + día
 // ------------------------------------------------------------
 
 db.registros_diarios.createIndex(
@@ -902,7 +1022,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 8.5 condiciones_sanitarias por albergue + fecha
+// 9.5 condiciones_sanitarias por albergue + fecha
 // ------------------------------------------------------------
 
 db.condiciones_sanitarias.createIndex(
@@ -923,7 +1043,50 @@ print(
 
 
 // ------------------------------------------------------------
-// 8.6 schema_migrations.version único
+// 9.6 casos_enfermedades por albergue + fecha
+// ------------------------------------------------------------
+
+db.casos_enfermedades.createIndex(
+    {
+        albergue_id: 1,
+        fecha: -1
+    },
+    {
+        name:
+            "ix_casos_enfermedades_albergue_fecha"
+    }
+);
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_casos_enfermedades_albergue_fecha"
+);
+
+
+// ------------------------------------------------------------
+// 9.7 casos_enfermedades por albergue + enfermedad + fecha
+// ------------------------------------------------------------
+
+db.casos_enfermedades.createIndex(
+    {
+        albergue_id: 1,
+        enfermedad: 1,
+        fecha: -1
+    },
+    {
+        name:
+            "ix_casos_enfermedades_albergue_enfermedad_fecha"
+    }
+);
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_casos_enfermedades_albergue_enfermedad_fecha"
+);
+
+
+// ------------------------------------------------------------
+// 9.8 schema_migrations.version único
 // ------------------------------------------------------------
 
 db.schema_migrations.createIndex(
@@ -945,7 +1108,7 @@ print(
 
 
 // ============================================================
-// 9. RESULTADO
+// 10. RESULTADO
 // ============================================================
 
 print("");
