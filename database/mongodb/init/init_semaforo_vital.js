@@ -8,6 +8,7 @@
 //   - usuarios
 //   - albergues
 //   - registros_diarios
+//   - condiciones_sanitarias
 //   - schema_migrations
 //
 // Responsabilidad:
@@ -519,7 +520,164 @@ const validatorRegistrosDiarios = {
 
 
 // ============================================================
-// 4. FUNCIÓN IDEMPOTENTE DE CREACIÓN / ACTUALIZACIÓN
+// 4. VALIDADOR - CONDICIONES SANITARIAS
+// ============================================================
+
+const validatorCondicionesSanitarias = {
+    $jsonSchema: {
+
+        bsonType: "object",
+
+        title:
+            "Esquema de validación de condiciones sanitarias",
+
+        additionalProperties: false,
+
+        required: [
+            "albergue_id",
+            "fecha",
+            "agua_potable_disponible",
+            "banos_disponibles",
+            "estado_higiene",
+            "estado_saneamiento",
+            "fuente_datos",
+            "registrado_por",
+            "created_at"
+        ],
+
+        properties: {
+
+            _id: {
+                bsonType: "objectId",
+                description:
+                    "Identificador único del registro"
+            },
+
+            albergue_id: {
+                bsonType: "objectId",
+                description:
+                    "Referencia lógica a albergues._id"
+            },
+
+            fecha: {
+                bsonType: "date",
+                description:
+                    "Fecha funcional de la condición sanitaria"
+            },
+
+            agua_potable_disponible: {
+                bsonType: "bool",
+                description:
+                    "Indica disponibilidad de agua potable"
+            },
+
+            banos_disponibles: {
+                bsonType: "int",
+                minimum: 0,
+                description:
+                    "Cantidad de baños disponibles"
+            },
+
+            estado_higiene: {
+                bsonType: "string",
+                minLength: 1,
+                description:
+                    "Estado de higiene. Catálogo funcional pendiente de definición"
+            },
+
+            estado_saneamiento: {
+                bsonType: "string",
+                minLength: 1,
+                description:
+                    "Estado de saneamiento. Catálogo funcional pendiente de definición"
+            },
+
+            otros_recursos_sanitarios: {
+
+                bsonType: "array",
+
+                description:
+                    "Otros recursos sanitarios disponibles",
+
+                items: {
+
+                    bsonType: "object",
+
+                    additionalProperties: false,
+
+                    required: [
+                        "nombre",
+                        "cantidad"
+                    ],
+
+                    properties: {
+
+                        nombre: {
+                            bsonType: "string",
+                            minLength: 1,
+                            description:
+                                "Nombre del recurso sanitario"
+                        },
+
+                        cantidad: {
+                            bsonType: "int",
+                            minimum: 0,
+                            description:
+                                "Cantidad disponible del recurso"
+                        },
+
+                        observacion: {
+                            bsonType: "string",
+                            description:
+                                "Observación asociada al recurso"
+                        }
+                    }
+                }
+            },
+
+            observaciones: {
+                bsonType: "string",
+                description:
+                    "Observaciones generales del registro"
+            },
+
+            fuente_datos: {
+                bsonType: "string",
+                minLength: 1,
+                description:
+                    "Origen del dato. Catálogo funcional pendiente de definición"
+            },
+
+            registrado_por: {
+                bsonType: "objectId",
+                description:
+                    "Referencia lógica al usuario creador"
+            },
+
+            created_at: {
+                bsonType: "date",
+                description:
+                    "Fecha y hora original de creación"
+            },
+
+            updated_at: {
+                bsonType: "date",
+                description:
+                    "Fecha y hora de la última modificación"
+            },
+
+            updated_by: {
+                bsonType: "objectId",
+                description:
+                    "Referencia lógica al usuario responsable de la última modificación"
+            }
+        }
+    }
+};
+
+
+// ============================================================
+// 5. FUNCIÓN IDEMPOTENTE DE CREACIÓN / ACTUALIZACIÓN
 // ============================================================
 
 function crearOActualizarColeccion(
@@ -593,7 +751,7 @@ function crearOActualizarColeccion(
 
 
 // ============================================================
-// 5. CREAR / ACTUALIZAR COLECCIONES
+// 6. CREAR / ACTUALIZAR COLECCIONES
 // ============================================================
 
 crearOActualizarColeccion(
@@ -614,8 +772,14 @@ crearOActualizarColeccion(
 );
 
 
+crearOActualizarColeccion(
+    "condiciones_sanitarias",
+    validatorCondicionesSanitarias
+);
+
+
 // ============================================================
-// 6. SCHEMA MIGRATIONS
+// 7. SCHEMA MIGRATIONS
 // ============================================================
 
 if (
@@ -643,7 +807,7 @@ if (
 
 
 // ============================================================
-// 7. ÍNDICES
+// 8. ÍNDICES
 // ============================================================
 
 print("");
@@ -651,7 +815,7 @@ print("Configurando índices...");
 
 
 // ------------------------------------------------------------
-// 7.1 usuarios.email único
+// 8.1 usuarios.email único
 // ------------------------------------------------------------
 
 db.usuarios.createIndex(
@@ -673,7 +837,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 7.2 usuarios.albergue_id
+// 8.2 usuarios.albergue_id
 // ------------------------------------------------------------
 
 db.usuarios.createIndex(
@@ -692,7 +856,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 7.3 albergues.codigo_albergue único
+// 8.3 albergues.codigo_albergue único
 // ------------------------------------------------------------
 
 db.albergues.createIndex(
@@ -714,7 +878,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 7.4 registro consolidado por albergue + día
+// 8.4 registro consolidado por albergue + día
 // ------------------------------------------------------------
 
 db.registros_diarios.createIndex(
@@ -738,7 +902,28 @@ print(
 
 
 // ------------------------------------------------------------
-// 7.5 schema_migrations.version único
+// 8.5 condiciones_sanitarias por albergue + fecha
+// ------------------------------------------------------------
+
+db.condiciones_sanitarias.createIndex(
+    {
+        albergue_id: 1,
+        fecha: -1
+    },
+    {
+        name:
+            "ix_condiciones_sanitarias_albergue_fecha"
+    }
+);
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_condiciones_sanitarias_albergue_fecha"
+);
+
+
+// ------------------------------------------------------------
+// 8.6 schema_migrations.version único
 // ------------------------------------------------------------
 
 db.schema_migrations.createIndex(
@@ -760,7 +945,7 @@ print(
 
 
 // ============================================================
-// 8. RESULTADO
+// 9. RESULTADO
 // ============================================================
 
 print("");
