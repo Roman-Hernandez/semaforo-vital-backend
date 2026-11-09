@@ -4,7 +4,7 @@
 
 Este directorio contiene la infraestructura MongoDB del proyecto **Semáforo Vital**.
 
-La implementación inicial fue desarrollada en la US-08 y posteriormente ha evolucionado mediante migraciones versionadas, validadores, índices, controles de integridad y pruebas DBA.
+La implementación inicial fue desarrollada en la US-08 y posteriormente ha evolucionado mediante migraciones versionadas, validadores `$jsonSchema`, índices, controles de integridad y pruebas DBA.
 
 La solución utiliza **MongoDB Atlas** como motor documental persistente y scripts versionados dentro del repositorio backend para garantizar que la estructura pueda reproducirse y evolucionar de forma controlada.
 
@@ -24,16 +24,18 @@ semaforo-vital-dev
 
 ## Colecciones implementadas
 
+Actualmente se encuentran implementadas:
+
 ```text
 usuarios
 albergues
 registros_diarios
 condiciones_sanitarias
+casos_enfermedades
 schema_migrations
-```text
-albergues
-registros_diarios
 ```
+
+`schema_migrations` es una colección técnica utilizada para controlar la evolución versionada del modelo.
 
 ---
 
@@ -44,59 +46,134 @@ database/
 └── mongodb/
     ├── init/
     │   └── init_semaforo_vital.js
+    │
     ├── migrations/
     │   ├── 001_fix_colombia_timezone.js
     │   ├── 002_create_usuarios.js
     │   ├── 003_harden_data_integrity.js
     │   ├── 004_add_update_traceability.js
-    │   └── 005_create_condiciones_sanitarias.js
+    │   ├── 005_create_condiciones_sanitarias.js
+    │   └── 006_create_casos_enfermedades.js
+    │
     ├── seeds/
     │   ├── seed_admin.py
     │   └── seed_semaforo_vital.js
+    │
     ├── tests/
     │   ├── test_validaciones.js
     │   ├── test_integridad_qa.js
-    │   └── test_condiciones_sanitarias.js
+    │   ├── test_condiciones_sanitarias.js
+    │   └── test_casos_enfermedades.js
+    │
     ├── docs/
     │   ├── evidencias_US-08.md
     │   └── contrato_datos_backend.md
+    │
     ├── migrate.py
     └── README.md
 ```
 
-### `init/`
+## `init/`
 
-Contiene el script de inicialización de MongoDB:
+Contiene:
 
-- creación de colecciones;
-- actualización de colecciones existentes;
+```text
+init_semaforo_vital.js
+```
+
+Este archivo representa el **estado estructural vigente** de MongoDB para instalaciones nuevas.
+
+Su responsabilidad es:
+
+- crear colecciones cuando no existen;
+- actualizar validadores mediante `collMod`;
+- establecer `validationLevel: strict`;
+- establecer `validationAction: error`;
+- crear o verificar índices;
+- permitir ejecución repetida sin generar duplicados.
+
+---
+
+## `migrations/`
+
+Contiene la evolución versionada de la base de datos.
+
+Cada cambio estructural nuevo debe implementarse mediante una migración nueva.
+
+Una migración que ya haya sido aplicada en un ambiente compartido:
+
+> No debe modificarse retroactivamente.
+
+---
+
+## `migrate.py`
+
+Es el orquestador general de migraciones MongoDB.
+
+Su función es:
+
+1. localizar migraciones con formato `NNN_*.js`;
+2. ordenarlas por versión;
+3. consultar `schema_migrations`;
+4. detectar cuáles se encuentran pendientes;
+5. ejecutarlas mediante `mongosh`;
+6. verificar que queden registradas correctamente.
+
+La migración:
+
+```text
+001_fix_colombia_timezone
+```
+
+es tratada como migración legacy debido a que fue ejecutada antes de existir `schema_migrations`.
+
+---
+
+## `seeds/`
+
+Contiene datos iniciales y datos simulados utilizados para desarrollo y pruebas.
+
+Los seeds deben ser reejecutables y no deben generar duplicados.
+
+---
+
+## `tests/`
+
+Contiene pruebas DBA para:
+
 - validadores `$jsonSchema`;
-- configuración de índices.
+- tipos BSON;
+- campos obligatorios;
+- rangos numéricos;
+- índices;
+- unicidad;
+- trazabilidad;
+- referencias lógicas;
+- detección de documentos huérfanos.
 
-### `seeds/`
+---
 
-Contiene datos semilla simulados para pruebas funcionales del backend.
+## `docs/`
 
-### `tests/`
+Contiene:
 
-Contiene pruebas automáticas de validación de esquema, restricciones de rangos y unicidad.
-
-### `docs/`
-
-Contiene la evidencia técnica de cumplimiento de la US-08.
+- evidencia técnica;
+- decisiones del modelo;
+- contrato vigente de datos entre MongoDB y las capas consumidoras.
 
 ---
 
 # 2. Requisitos
 
-Para ejecutar los scripts se requiere:
+Para ejecutar la infraestructura MongoDB se requiere:
 
-- acceso autorizado al proyecto de MongoDB Atlas;
+- acceso autorizado al proyecto MongoDB Atlas;
 - acceso al cluster `semaforo-vital-dev`;
 - `mongosh` instalado;
-- usuario de base de datos con permisos suficientes sobre `semaforo_vital`.
+- Python disponible para ejecutar `migrate.py`;
+- usuario MongoDB con permisos suficientes sobre `semaforo_vital`.
 
-Durante la implementación se utilizó:
+Durante la implementación inicial se utilizó:
 
 ```text
 mongosh 2.13.0
@@ -108,18 +185,20 @@ mongosh 2.13.0
 
 El backend utiliza `pydantic-settings` y carga variables desde `.env`.
 
-Variables definidas:
+Variables principales:
 
 ```env
 MONGODB_URI=
 MONGODB_DB=semaforo_vital
+APP_TIMEZONE=America/Bogota
 ```
 
-En Python pueden consultarse como:
+En Python se encuentran disponibles mediante:
 
 ```python
 settings.mongodb_uri
 settings.mongodb_db
+settings.app_timezone
 ```
 
 El archivo `.env` está excluido por `.gitignore`.
@@ -128,32 +207,29 @@ No deben versionarse:
 
 - usuarios de MongoDB;
 - contraseñas;
-- cadenas de conexión privadas;
-- credenciales de Atlas.
+- URI privadas;
+- credenciales de Atlas;
+- secretos del backend.
 
 ---
 
 # 4. Conexión a MongoDB Atlas
 
-La conexión debe obtenerse desde:
+La cadena de conexión debe obtenerse desde MongoDB Atlas.
+
+Conceptualmente:
 
 ```text
 MongoDB Atlas
-→ SemaforoVital
-→ semaforo-vital-dev
-→ Connect
-→ Shell
+        ↓
+SemaforoVital
+        ↓
+semaforo-vital-dev
+        ↓
+Connect
 ```
 
-Por seguridad, la contraseña no debe incluirse directamente en comandos versionados.
-
-Después de conectarse, seleccionar la base:
-
-```javascript
-use semaforo_vital
-```
-
-Validar conexión:
+Validación desde `mongosh`:
 
 ```javascript
 db.getName()
@@ -177,9 +253,56 @@ Resultado esperado:
 { ok: 1 }
 ```
 
+Las credenciales nunca deben almacenarse dentro de scripts versionados.
+
 ---
 
-# 5. Inicialización de la base de datos
+# 5. Migraciones
+
+El mecanismo recomendado para ambientes existentes es:
+
+```powershell
+python -m database.mongodb.migrate
+```
+
+El orquestador detecta automáticamente las migraciones pendientes.
+
+Migraciones vigentes:
+
+```text
+001_fix_colombia_timezone.js
+002_create_usuarios.js
+003_harden_data_integrity.js
+004_add_update_traceability.js
+005_create_condiciones_sanitarias.js
+006_create_casos_enfermedades.js
+```
+
+## Estado conceptual
+
+```text
+001
+Ajuste histórico de zona horaria
+        ↓
+002
+Creación de usuarios
+        ↓
+003
+Fortalecimiento de integridad
+        ↓
+004
+Trazabilidad de modificaciones
+        ↓
+005
+Condiciones sanitarias
+        ↓
+006
+Casos de enfermedades
+```
+
+---
+
+# 6. Inicialización reproducible
 
 Archivo:
 
@@ -187,43 +310,107 @@ Archivo:
 database/mongodb/init/init_semaforo_vital.js
 ```
 
-Ejecución desde `mongosh`:
+Ejecución:
 
-```javascript
-load("database/mongodb/init/init_semaforo_vital.js")
+```powershell
+mongosh "$env:MONGODB_URI" --quiet --file "database/mongodb/init/init_semaforo_vital.js"
 ```
 
-El script administra las colecciones:
+Actualmente administra:
 
 ```text
+usuarios
 albergues
 registros_diarios
+condiciones_sanitarias
+casos_enfermedades
+schema_migrations
 ```
 
-El script es reejecutable:
+Cuando una colección no existe:
 
-- si la colección no existe, utiliza `createCollection`;
-- si ya existe, actualiza el validador mediante `collMod`.
+```text
+createCollection
+```
 
-Las colecciones usan:
+Cuando ya existe:
+
+```text
+collMod
+```
+
+Los validadores utilizan:
 
 ```text
 validationLevel: strict
 validationAction: error
 ```
 
-Los documentos que incumplen las reglas son rechazados por MongoDB.
+Los índices también se crean de manera reejecutable.
 
 ---
 
-# 6. Colección `albergues`
+# 7. Colección `usuarios`
 
-Estructura funcional principal:
+## Propósito
+
+Almacena los usuarios autorizados para utilizar el sistema.
+
+Campos principales:
+
+```text
+_id
+email
+password_hash
+role
+active
+nombre
+apellido
+albergue_id
+created_at
+updated_at
+last_login_at
+```
+
+Roles permitidos:
+
+```text
+super_administrador
+administrador_albergue
+```
+
+El correo debe almacenarse normalizado en minúsculas.
+
+`password_hash` debe utilizar formato Argon2id.
+
+Nunca deben almacenarse contraseñas en texto plano.
+
+## Índices
+
+Correo único:
+
+```text
+ux_usuarios_email
+```
+
+Consulta por albergue:
+
+```text
+ix_usuarios_albergue_id
+```
+
+---
+
+# 8. Colección `albergues`
+
+Estructura funcional:
 
 ```javascript
 {
     _id: ObjectId,
+
     codigo_albergue: String,
+
     nombre: String,
 
     ubicacion: {
@@ -233,33 +420,32 @@ Estructura funcional principal:
 
         coordenadas: {
             type: "Point",
-            coordinates: [Number, Number]
+            coordinates: [
+                Number,
+                Number
+            ]
         }
     },
 
     capacidad_instalada: Int32,
+
     activo: Boolean,
 
     registrado_por: ObjectId,
+
     fecha: Date,
-    created_at: Date
+
+    created_at: Date,
+
+    updated_at: Date,
+
+    updated_by: ObjectId
 }
 ```
 
-### Reglas principales
+## GeoJSON
 
-```text
-codigo_albergue      obligatorio
-nombre               obligatorio
-ubicacion            obligatoria
-capacidad_instalada  >= 0
-activo               obligatorio
-registrado_por       obligatorio
-fecha                obligatoria
-created_at           obligatorio
-```
-
-GeoJSON utiliza el orden:
+Las coordenadas utilizan:
 
 ```text
 [longitud, latitud]
@@ -270,48 +456,60 @@ Ejemplo:
 ```javascript
 {
     type: "Point",
-    coordinates: [-75.6946, 4.8143]
+    coordinates: [
+        -75.6946,
+        4.8143
+    ]
 }
 ```
 
+## Índice
+
+```text
+ux_albergues_codigo_albergue
+```
+
+`codigo_albergue` debe ser único.
+
 ---
 
-# 7. Colección `registros_diarios`
+# 9. Colección `registros_diarios`
+
+## Propósito
+
+Representa el consolidado operativo de un albergue para un día específico.
 
 Estructura:
 
 ```javascript
 {
     _id: ObjectId,
+
     albergue_id: ObjectId,
+
     fecha: Date,
 
     poblacion: Int32,
+
     litros_agua: Number,
+
     letrinas: Int32,
+
     casos_eda: Int32,
+
     casos_ira: Int32,
 
     registrado_por: ObjectId,
-    created_at: Date
+
+    created_at: Date,
+
+    updated_at: Date,
+
+    updated_by: ObjectId
 }
 ```
 
-## Campos obligatorios
-
-```text
-albergue_id
-fecha
-poblacion
-litros_agua
-letrinas
-casos_eda
-casos_ira
-registrado_por
-created_at
-```
-
-## Restricciones de rango
+## Restricciones
 
 ```text
 poblacion   >= 0
@@ -321,286 +519,25 @@ casos_eda   >= 0
 casos_ira   >= 0
 ```
 
----
+## Regla funcional
 
-# 8. Manejo de fechas
+Solo puede existir:
 
-`fecha` representa el **día operativo del registro**.
+> Un registro consolidado por albergue y día.
 
-Debe normalizarse a medianoche de la zona horaria funcional `America/Bogota`.
-
-MongoDB almacena BSON Date como un instante UTC, por lo tanto:
-
-- Hora funcional Colombia: `2026-10-14 00:00:00 UTC-05:00`
-- Instante BSON equivalente: `ISODate("2026-10-14T05:00:00.000Z")`
-
-`created_at` representa el instante real en el que se crea el documento:
-
-```javascript
-created_at: new Date()
-```
-
-Esta separación es necesaria para garantizar correctamente la unicidad diaria.
-
----
-
-# 9. Índice compuesto único
-
-En `registros_diarios` se implementa:
-
-```javascript
-db.registros_diarios.createIndex(
-    {
-        albergue_id: 1,
-        fecha: -1
-    },
-    {
-        name: "ux_registros_diarios_albergue_fecha",
-        unique: true
-    }
-);
-```
-
-Objetivos:
-
-1. evitar dos registros para el mismo albergue y la misma fecha;
-2. acelerar consultas temporales por albergue.
-
-Un intento de duplicado genera:
-
-```text
-E11000 duplicate key error
-```
-
-Código:
-
-```text
-11000
-```
-
----
-
-# 10. Datos semilla
-
-Archivo:
-
-```text
-database/mongodb/seeds/seed_semaforo_vital.js
-```
-
-Ejecución:
-
-```javascript
-load("database/mongodb/seeds/seed_semaforo_vital.js")
-```
-
-El script verifica primero que existan:
-
-```text
-albergues
-registros_diarios
-```
-
-## Escenario crítico
-
-```text
-Población: 200
-Agua: 800 L
-Letrinas: 4
-Casos EDA: 8
-Casos IRA: 3
-```
-
-Indicador:
-
-```text
-800 / 200 = 4 L/persona/día
-```
-
-Cumple:
-
-```text
-< 5 L/persona/día
-```
-
-## Escenario óptimo
-
-```text
-Población: 100
-Agua: 1800 L
-Letrinas: 8
-Casos EDA: 0
-Casos IRA: 1
-```
-
-Indicador:
-
-```text
-1800 / 100 = 18 L/persona/día
-```
-
-Cumple:
-
-```text
->= 15 L/persona/día
-```
-
-El indicador no se persiste como campo. Se calcula mediante:
-
-```text
-litros_agua / poblacion
-```
-
-## Reejecución
-
-Los datos utilizan identificadores determinísticos y:
-
-```javascript
-updateOne(..., { upsert: true })
-```
-
-Esto permite ejecutar el script varias veces sin duplicar las semillas.
-
-Resultado esperado después de cualquier reejecución:
-
-```text
-albergues: 2
-registros_diarios: 2
-```
-
----
-
-# 11. Pruebas automáticas
-
-Archivo:
-
-```text
-database/mongodb/tests/test_validaciones.js
-```
-
-Ejecución:
-
-```javascript
-load("database/mongodb/tests/test_validaciones.js")
-```
-
-Pruebas implementadas:
-
-| # | Prueba | Resultado esperado |
-|---:|---|---|
-| 1 | `poblacion = -1` | Error 121 |
-| 2 | `litros_agua = -1` | Error 121 |
-| 3 | `letrinas = -1` | Error 121 |
-| 4 | `casos_eda = -1` | Error 121 |
-| 5 | `casos_ira = -1` | Error 121 |
-| 6 | falta `registrado_por` | Error 121 |
-| 7 | documento válido | Aceptado |
-| 8 | duplicado `albergue_id + fecha` | Error 11000 |
-
-Resultado esperado:
-
-```text
-Pruebas exitosas: 8
-Pruebas fallidas: 0
-```
-
-Los datos temporales usados durante las pruebas son eliminados al finalizar.
-
----
-
-# 12. Integridad referencial
-
-`albergue_id` se valida como:
-
-```text
-ObjectId
-```
-
-MongoDB `$jsonSchema` no implementa una restricción de clave foránea tradicional entre colecciones.
-
-Por tanto:
-
-```text
-$jsonSchema
-    ↓
-puede validar que albergue_id sea ObjectId
-    ↓
-pero no puede verificar que exista en albergues
-```
-
-La existencia del albergue debe validarse desde la capa de aplicación antes de registrar información diaria.
-
-Los datos semilla sí utilizan referencias existentes y consistentes.
-
----
-
-# 13. Orden recomendado de ejecución
-
-Desde una sesión autenticada de `mongosh`:
-
-```javascript
-load("database/mongodb/init/init_semaforo_vital.js")
-```
-
-Después:
-
-```javascript
-load("database/mongodb/seeds/seed_semaforo_vital.js")
-```
-
-Finalmente:
-
-```javascript
-load("database/mongodb/tests/test_validaciones.js")
-```
-
-Flujo:
-
-```text
-MongoDB Atlas
-      ↓
-init_semaforo_vital.js
-      ↓
-colecciones + $jsonSchema + índices
-      ↓
-seed_semaforo_vital.js
-      ↓
-2 albergues + 2 registros diarios
-      ↓
-test_validaciones.js
-      ↓
-8 pruebas exitosas / 0 fallidas
-```
-
----
-
-# 14. Verificaciones rápidas
-
-## Listar colecciones
-
-```javascript
-db.getCollectionNames().sort()
-```
-
-Esperado:
-
-```javascript
-[
-    "albergues",
-    "registros_diarios"
-]
-```
-
-## Ver índices
-
-```javascript
-db.registros_diarios.getIndexes()
-```
-
-Debe aparecer:
+Índice:
 
 ```text
 ux_registros_diarios_albergue_fecha
+```
+
+sobre:
+
+```javascript
+{
+    albergue_id: 1,
+    fecha: -1
+}
 ```
 
 con:
@@ -609,226 +546,792 @@ con:
 unique: true
 ```
 
-## Contar semillas
+## Casos EDA e IRA
 
-```javascript
-db.albergues.countDocuments({})
-db.registros_diarios.countDocuments({})
-```
-
-Esperado:
+Los campos:
 
 ```text
-2
-2
+casos_eda
+casos_ira
+```
+
+representan:
+
+> Casos nuevos reportados durante el día.
+
+No representan casos activos ni valores acumulados.
+
+---
+
+# 10. Colección `condiciones_sanitarias`
+
+Fue incorporada mediante:
+
+```text
+005_create_condiciones_sanitarias.js
+```
+
+## Propósito
+
+Almacena condiciones sanitarias observadas en un albergue para una fecha determinada.
+
+Estructura:
+
+```javascript
+{
+    _id: ObjectId,
+
+    albergue_id: ObjectId,
+
+    fecha: Date,
+
+    agua_potable_disponible: Boolean,
+
+    banos_disponibles: Int32,
+
+    estado_higiene: String,
+
+    estado_saneamiento: String,
+
+    otros_recursos_sanitarios: [
+        {
+            nombre: String,
+            cantidad: Int32,
+            observacion: String
+        }
+    ],
+
+    observaciones: String,
+
+    fuente_datos: String,
+
+    registrado_por: ObjectId,
+
+    created_at: Date,
+
+    updated_at: Date,
+
+    updated_by: ObjectId
+}
+```
+
+## Reglas principales
+
+Son obligatorios:
+
+```text
+albergue_id
+fecha
+agua_potable_disponible
+banos_disponibles
+estado_higiene
+estado_saneamiento
+fuente_datos
+registrado_por
+created_at
+```
+
+`banos_disponibles` debe ser:
+
+```text
+>= 0
+```
+
+Cuando exista `otros_recursos_sanitarios`, cada elemento requiere:
+
+```text
+nombre
+cantidad
+```
+
+y:
+
+```text
+cantidad >= 0
+```
+
+Los catálogos de:
+
+```text
+estado_higiene
+estado_saneamiento
+fuente_datos
+```
+
+permanecen abiertos hasta que exista definición funcional aprobada.
+
+## Índice
+
+```text
+ix_condiciones_sanitarias_albergue_fecha
+```
+
+sobre:
+
+```javascript
+{
+    albergue_id: 1,
+    fecha: -1
+}
+```
+
+No es único.
+
+---
+
+# 11. Colección `casos_enfermedades`
+
+Fue incorporada mediante:
+
+```text
+006_create_casos_enfermedades.js
+```
+
+## Propósito
+
+Almacena la cantidad de casos activos de una enfermedad específica para un albergue y una fecha determinada.
+
+Estructura:
+
+```javascript
+{
+    _id: ObjectId,
+
+    albergue_id: ObjectId,
+
+    fecha: Date,
+
+    enfermedad: String,
+
+    cantidad_casos_activos: Int32,
+
+    observaciones: String,
+
+    fuente_datos: String,
+
+    registrado_por: ObjectId,
+
+    created_at: Date,
+
+    updated_at: Date,
+
+    updated_by: ObjectId
+}
+```
+
+## Semántica de `cantidad_casos_activos`
+
+`cantidad_casos_activos` representa:
+
+> La cantidad de personas que tienen activa una enfermedad determinada en la fecha del registro.
+
+Ejemplo:
+
+```text
+Albergue A
+Fecha: 2026-11-10
+Enfermedad: EDA
+cantidad_casos_activos: 7
+```
+
+significa:
+
+```text
+7 personas presentan EDA activa en esa fecha.
+```
+
+No representa:
+
+```text
+casos nuevos del día
+```
+
+ni:
+
+```text
+casos acumulados históricos
+```
+
+Esta semántica es diferente a:
+
+```text
+registros_diarios.casos_eda
+registros_diarios.casos_ira
+```
+
+que representan casos nuevos del día.
+
+## Campos obligatorios
+
+```text
+albergue_id
+fecha
+enfermedad
+cantidad_casos_activos
+fuente_datos
+registrado_por
+created_at
+```
+
+## Campos opcionales
+
+```text
+observaciones
+updated_at
+updated_by
+```
+
+## Reglas
+
+`enfermedad`:
+
+```text
+String no vacío
+```
+
+`cantidad_casos_activos`:
+
+```text
+Int32 >= 0
+```
+
+`fuente_datos`:
+
+```text
+String no vacío
+```
+
+El catálogo definitivo de enfermedades permanece pendiente de definición funcional.
+
+Por esta razón:
+
+```text
+enfermedad
+```
+
+no utiliza actualmente un `enum`.
+
+La misma decisión aplica a:
+
+```text
+fuente_datos
+```
+
+## Índices
+
+Consulta temporal por albergue:
+
+```text
+ix_casos_enfermedades_albergue_fecha
+```
+
+sobre:
+
+```javascript
+{
+    albergue_id: 1,
+    fecha: -1
+}
+```
+
+Consulta histórica de una enfermedad:
+
+```text
+ix_casos_enfermedades_albergue_enfermedad_fecha
+```
+
+sobre:
+
+```javascript
+{
+    albergue_id: 1,
+    enfermedad: 1,
+    fecha: -1
+}
+```
+
+Ninguno de los dos índices es único.
+
+Actualmente no existe una regla funcional aprobada que limite a un único documento por:
+
+```text
+albergue + enfermedad + fecha
 ```
 
 ---
 
-# 15. Seguridad
+# 12. Manejo de fechas
 
-Para el entorno de desarrollo se creó un usuario limitado a la base `semaforo_vital` con los roles necesarios para inicialización y administración de la US.
+La zona horaria funcional del proyecto es:
 
-No deben utilizarse credenciales administrativas globales dentro del backend.
+```text
+America/Bogota
+```
+
+Una fecha funcional:
+
+```text
+2026-10-14 00:00:00 America/Bogota
+```
+
+se almacena en MongoDB como:
+
+```text
+2026-10-14T05:00:00.000Z
+```
+
+MongoDB almacena BSON Date como un instante UTC.
+
+`created_at` representa el momento real de creación:
+
+```javascript
+created_at: new Date()
+```
+
+`fecha` representa la fecha funcional asociada al dato.
+
+---
+
+# 13. Integridad referencial
+
+MongoDB `$jsonSchema` valida tipos pero no implementa claves foráneas tradicionales.
+
+Las principales referencias lógicas actuales son:
+
+```text
+usuarios.albergue_id
+    → albergues._id
+
+albergues.registrado_por
+    → usuarios._id
+
+albergues.updated_by
+    → usuarios._id
+
+registros_diarios.albergue_id
+    → albergues._id
+
+registros_diarios.registrado_por
+    → usuarios._id
+
+registros_diarios.updated_by
+    → usuarios._id
+
+condiciones_sanitarias.albergue_id
+    → albergues._id
+
+condiciones_sanitarias.registrado_por
+    → usuarios._id
+
+condiciones_sanitarias.updated_by
+    → usuarios._id
+
+casos_enfermedades.albergue_id
+    → albergues._id
+
+casos_enfermedades.registrado_por
+    → usuarios._id
+
+casos_enfermedades.updated_by
+    → usuarios._id
+```
+
+MongoDB puede verificar:
+
+```text
+albergue_id es ObjectId
+```
+
+pero no puede garantizar mediante `$jsonSchema`:
+
+```text
+el ObjectId existe realmente en albergues
+```
+
+La aplicación debe validar estas referencias antes de persistir información.
+
+Adicionalmente, los controles DBA utilizan `$lookup` para detectar referencias huérfanas.
+
+---
+
+# 14. Trazabilidad
+
+Los documentos operativos utilizan:
+
+```text
+registrado_por
+created_at
+```
+
+para identificar la creación original.
+
+Cuando el documento sea modificado pueden utilizarse:
+
+```text
+updated_at
+updated_by
+```
+
+Reglas:
+
+```text
+created_at
+```
+
+no debe sustituirse durante una actualización.
+
+```text
+registrado_por
+```
+
+identifica al creador original y no debe utilizarse como identificador del último modificador.
+
+---
+
+# 15. Datos semilla
+
+Archivo:
+
+```text
+database/mongodb/seeds/seed_semaforo_vital.js
+```
+
+Los seeds existentes fueron diseñados para pruebas del modelo inicial.
+
+Utilizan identificadores determinísticos y operaciones reejecutables.
+
+El usuario responsable se obtiene desde un:
+
+```text
+super_administrador
+```
+
+con:
+
+```text
+active = true
+```
+
+No deben utilizarse identificadores ficticios para `registrado_por`.
+
+---
+
+# 16. Pruebas DBA
+
+## Pruebas originales
+
+```text
+database/mongodb/tests/test_validaciones.js
+```
+
+Resultado esperado:
+
+```text
+Pruebas exitosas: 8
+Pruebas fallidas: 0
+```
+
+---
+
+## Pruebas de integridad QA
+
+```text
+database/mongodb/tests/test_integridad_qa.js
+```
+
+Resultado esperado:
+
+```text
+12 pruebas exitosas
+0 pruebas fallidas
+```
+
+---
+
+## Condiciones sanitarias
+
+```text
+database/mongodb/tests/test_condiciones_sanitarias.js
+```
+
+Valida:
+
+- documento válido;
+- campos obligatorios;
+- tipos BSON;
+- valores negativos;
+- recursos embebidos;
+- `additionalProperties: false`;
+- trazabilidad;
+- índice;
+- referencias huérfanas.
+
+Resultado validado:
+
+```text
+Pruebas exitosas: 14
+Pruebas fallidas: 0
+```
+
+---
+
+## Casos de enfermedades
+
+```text
+database/mongodb/tests/test_casos_enfermedades.js
+```
+
+Valida:
+
+- documento válido;
+- obligatoriedad de `albergue_id`;
+- obligatoriedad de `fecha`;
+- obligatoriedad de `enfermedad`;
+- obligatoriedad de `cantidad_casos_activos`;
+- obligatoriedad de `fuente_datos`;
+- rechazo de enfermedad vacía;
+- rechazo de cantidades negativas;
+- tipo BSON de `cantidad_casos_activos`;
+- tipo de `registrado_por`;
+- rechazo de propiedades adicionales;
+- trazabilidad mediante `updated_at` y `updated_by`;
+- existencia de los índices epidemiológicos;
+- detección de referencias huérfanas.
+
+Resultado validado:
+
+```text
+Pruebas exitosas: 14
+Pruebas fallidas: 0
+```
+
+---
+
+# 17. Índices vigentes
+
+## `usuarios`
+
+```text
+ux_usuarios_email
+ix_usuarios_albergue_id
+```
+
+## `albergues`
+
+```text
+ux_albergues_codigo_albergue
+```
+
+## `registros_diarios`
+
+```text
+ux_registros_diarios_albergue_fecha
+```
+
+Único.
+
+## `condiciones_sanitarias`
+
+```text
+ix_condiciones_sanitarias_albergue_fecha
+```
+
+No único.
+
+## `casos_enfermedades`
+
+```text
+ix_casos_enfermedades_albergue_fecha
+ix_casos_enfermedades_albergue_enfermedad_fecha
+```
+
+No únicos.
+
+## `schema_migrations`
+
+```text
+ux_schema_migrations_version
+```
+
+Único.
+
+---
+
+# 18. Orden recomendado de preparación
+
+Para un ambiente nuevo, conceptualmente:
+
+```text
+Inicialización estructural
+        ↓
+Migraciones versionadas
+        ↓
+Usuario administrativo inicial
+        ↓
+Datos semilla
+        ↓
+Pruebas DBA
+```
+
+Para un ambiente existente:
+
+```text
+main actualizado
+        ↓
+python -m database.mongodb.migrate
+        ↓
+migraciones pendientes
+        ↓
+pruebas específicas
+        ↓
+actualización del init
+        ↓
+nueva ejecución de pruebas
+```
+
+---
+
+# 19. Verificaciones rápidas
+
+## Colecciones
+
+```javascript
+db.getCollectionNames().sort()
+```
+
+Entre las colecciones del modelo deben encontrarse:
+
+```text
+usuarios
+albergues
+registros_diarios
+condiciones_sanitarias
+casos_enfermedades
+schema_migrations
+```
+
+## Migraciones
+
+```javascript
+db.schema_migrations
+    .find({})
+    .sort({ version: 1 })
+```
+
+Deben encontrarse registradas las migraciones gestionadas por el mecanismo vigente.
+
+La migración `001` puede no tener registro histórico porque antecede a `schema_migrations`.
+
+## Índices de casos de enfermedades
+
+```javascript
+db.casos_enfermedades.getIndexes()
+```
+
+Deben encontrarse:
+
+```text
+ix_casos_enfermedades_albergue_fecha
+ix_casos_enfermedades_albergue_enfermedad_fecha
+```
+
+---
+
+# 20. Seguridad
+
+No deben versionarse:
+
+- contraseñas;
+- credenciales MongoDB;
+- URI privadas;
+- tokens;
+- secretos;
+- cuentas administrativas globales.
 
 Recomendaciones:
 
 - mantener `.env` fuera de Git;
-- no registrar contraseñas en scripts;
-- no almacenar la URI privada en documentación;
-- limitar Network Access a direcciones autorizadas;
-- utilizar usuarios con privilegios mínimos necesarios.
+- utilizar usuarios con privilegios mínimos;
+- restringir Network Access;
+- evitar credenciales dentro de scripts;
+- utilizar hashes seguros para contraseñas;
+- limitar información sensible almacenada.
+
+Las colecciones epidemiológicas implementadas actualmente manejan cantidades agregadas.
+
+`casos_enfermedades` no almacena identificadores individuales de pacientes.
 
 ---
 
-# 16. Evidencia
+# 21. Reglas para evolución del modelo
 
-La evidencia detallada de cumplimiento de los criterios de aceptación se encuentra en:
+Todo cambio nuevo debe seguir este proceso:
 
 ```text
-database/mongodb/docs/evidencias_US-08.md
+análisis
+    ↓
+nueva migración
+    ↓
+pruebas
+    ↓
+actualización de init
+    ↓
+documentación
+    ↓
+commit
+    ↓
+Pull Request
 ```
+
+No deben modificarse migraciones ya aplicadas para representar cambios posteriores.
+
+Si un nuevo campo requiere información que no puede determinarse para documentos históricos:
+
+> No debe inventarse información para completar el modelo.
+
+Los catálogos funcionales pendientes tampoco deben convertirse unilateralmente en restricciones `enum` desde la base de datos.
 
 ---
 
-# 17. Resultado de la US-08
+# 22. Estado actual
+
+La infraestructura MongoDB cuenta actualmente con:
 
 ```text
-CA-01  $jsonSchema                    CUMPLE
-CA-02  índice compuesto único         CUMPLE
-CA-03  trazabilidad obligatoria       CUMPLE
-CA-04  datos semilla                  CUMPLE
-CA-05  rechazo de valores negativos   CUMPLE
+usuarios                        ✓
+albergues                       ✓
+registros_diarios               ✓
+condiciones_sanitarias          ✓
+casos_enfermedades              ✓
+schema_migrations               ✓
 ```
 
-La infraestructura documental necesaria para iniciar integración y pruebas del backend se encuentra implementada en MongoDB Atlas y es reproducible desde los scripts versionados en el repositorio.
-
-## Ajustes QA posteriores a la US-08
-
-Como resultado de la revisión QA, se fortaleció el modelo de datos MongoDB sin reconstruir las colecciones existentes.
-
-### Colección usuarios
-
-La colección `usuarios` fue incorporada mediante la migración:
-
-`002_create_usuarios.js`
-
-El contrato vigente utiliza:
-
-- `email`
-- `password_hash`
-- `role`
-- `active`
-- `nombre`
-- `apellido`
-- `albergue_id`
-- `created_at`
-- `updated_at`
-- `last_login_at`
-
-Roles soportados:
-
-- `super_administrador`
-- `administrador_albergue`
-
-El correo debe almacenarse normalizado en minúsculas.
-
-El campo `password_hash` utiliza Argon2id y nunca debe contener contraseñas en texto plano.
-
-### Integridad e índices
-
-La migración:
-
-`003_harden_data_integrity.js`
-
-incorporó y validó:
-
-- índice único de `usuarios.email`;
-- índice de `usuarios.albergue_id`;
-- índice único de `albergues.codigo_albergue`;
-- índice único compuesto de `registros_diarios.albergue_id + fecha`;
-- índice único de `schema_migrations.version`;
-- validaciones de roles y asociación de usuarios a albergues;
-- validación del formato Argon2id;
-- normalización de correo.
-
-MongoDB no aplica claves foráneas entre colecciones.
-
-Las referencias:
-
-`albergues.registrado_por → usuarios._id`
-
-`registros_diarios.registrado_por → usuarios._id`
-
-`registros_diarios.albergue_id → albergues._id`
-
-`usuarios.albergue_id → albergues._id`
-
-deben validarse desde la capa de aplicación y mediante controles DBA.
-
-### Trazabilidad
-
-La migración:
-
-`004_add_update_traceability.js`
-
-incorporó en `albergues` y `registros_diarios` los campos opcionales:
-
-- `updated_at`
-- `updated_by`
-
-`created_at` conserva siempre la fecha original de creación.
-
-`registrado_por` identifica al usuario creador.
-
-`updated_at` y `updated_by` representan la última modificación cuando exista.
-
-No se agregan valores artificiales a documentos históricos.
-
-### Registros diarios
-
-Existe un único registro consolidado por:
-
-`albergue_id + fecha`
-
-El índice:
-
-`ux_registros_diarios_albergue_fecha`
-
-garantiza dicha unicidad.
-
-Los campos:
-
-- `casos_eda`
-- `casos_ira`
-
-representan casos nuevos reportados durante el día y no valores acumulados.
-
-### Zona horaria funcional
-
-La zona horaria funcional del proyecto es:
-
-`America/Bogota`
-
-Una fecha funcional:
-
-`2026-10-14 00:00:00 America/Bogota`
-
-se persiste en MongoDB como:
-
-`ISODate("2026-10-14T05:00:00.000Z")`
-
-### Datos semilla
-
-`seed_semaforo_vital.js` fue actualizado para no utilizar usuarios ficticios.
-
-El script busca un:
-
-`super_administrador`
-
-con:
-
-`active = true`
-
-y utiliza su `_id` real como `registrado_por`.
-
-El seed puede ejecutarse repetidamente sin generar duplicados.
-
-### Pruebas QA
-
-El archivo:
-
-`database/mongodb/tests/test_integridad_qa.js`
-
-valida:
-
-- usuario válido;
-- correo duplicado;
-- correo no normalizado;
-- hash no Argon2id;
-- rol inválido;
-- administrador de albergue sin `albergue_id`;
-- superadministrador asociado incorrectamente a un albergue;
-- código de albergue duplicado;
-- registro diario duplicado;
-- tipo inválido de `updated_by`;
-- detección de referencias huérfanas;
-- limpieza de datos temporales.
-
-Resultado esperado:
-
-`12 pruebas exitosas`
-
-`0 pruebas fallidas`
-
-### Reproducibilidad
-
-El archivo:
-
-`init_semaforo_vital.js`
-
-representa el estado estructural vigente de la base de datos.
-
-Puede ejecutarse repetidamente mediante `collMod` y `createIndex` sin generar duplicados.
-
-Las migraciones históricas permanecen versionadas e inmutables.
+Migraciones:
+
+```text
+001_fix_colombia_timezone                 ✓ legacy
+002_create_usuarios                       ✓
+003_harden_data_integrity                 ✓
+004_add_update_traceability               ✓
+005_create_condiciones_sanitarias         ✓
+006_create_casos_enfermedades             ✓
+```
+
+Pruebas específicas recientes:
+
+```text
+condiciones_sanitarias     14/14
+casos_enfermedades         14/14
+```
+
+El estado estructural vigente se encuentra reproducido en:
+
+```text
+database/mongodb/init/init_semaforo_vital.js
+```
+
+y la evolución histórica se conserva mediante:
+
+```text
+database/mongodb/migrations/
+```
