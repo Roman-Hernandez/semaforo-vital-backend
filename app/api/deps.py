@@ -4,6 +4,8 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pymongo.database import Database
+from app.domain.ports.albergue_repository import AlbergueRepository
+from app.infrastructure.repositories.mongo_albergue_repository import MongoAlbergueRepository
 
 from app.application.auth import (
     AuthenticateUserUseCase,
@@ -28,6 +30,10 @@ def get_user_repository(
 ) -> UserRepository:
     return MongoUserRepository(database)
 
+def get_albergue_repository(
+    database: Annotated[Database, Depends(get_database)],
+) -> AlbergueRepository:
+    return MongoAlbergueRepository(database)
 
 def get_auth_use_case(
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
