@@ -10,6 +10,7 @@
 //   - registros_diarios
 //   - condiciones_sanitarias
 //   - casos_enfermedades
+//   - intervenciones
 //   - schema_migrations
 //
 // Responsabilidad:
@@ -313,10 +314,7 @@ const validatorAlbergues = {
                                         ],
 
                                         minimum: -180,
-                                        maximum: 180,
-
-                                        description:
-                                            "Longitud válida"
+                                        maximum: 180
                                     },
 
                                     {
@@ -328,10 +326,7 @@ const validatorAlbergues = {
                                         ],
 
                                         minimum: -90,
-                                        maximum: 90,
-
-                                        description:
-                                            "Latitud válida"
+                                        maximum: 90
                                     }
                                 ]
                             }
@@ -342,51 +337,31 @@ const validatorAlbergues = {
 
             capacidad_instalada: {
                 bsonType: "int",
-                minimum: 0,
-
-                description:
-                    "Cantidad máxima instalada. Debe ser mayor o igual a cero"
+                minimum: 0
             },
 
             activo: {
-                bsonType: "bool",
-                description:
-                    "Estado lógico del albergue"
+                bsonType: "bool"
             },
 
             registrado_por: {
-                bsonType: "objectId",
-
-                description:
-                    "Referencia lógica al usuario responsable de la creación"
+                bsonType: "objectId"
             },
 
             fecha: {
-                bsonType: "date",
-
-                description:
-                    "Fecha funcional asociada al registro"
+                bsonType: "date"
             },
 
             created_at: {
-                bsonType: "date",
-
-                description:
-                    "Fecha y hora técnica original de creación"
+                bsonType: "date"
             },
 
             updated_at: {
-                bsonType: "date",
-
-                description:
-                    "Fecha y hora de la última modificación"
+                bsonType: "date"
             },
 
             updated_by: {
-                bsonType: "objectId",
-
-                description:
-                    "Referencia lógica al usuario responsable de la última modificación"
+                bsonType: "objectId"
             }
         }
     }
@@ -422,32 +397,20 @@ const validatorRegistrosDiarios = {
         properties: {
 
             _id: {
-                bsonType: "objectId",
-
-                description:
-                    "Identificador único del registro diario"
+                bsonType: "objectId"
             },
 
             albergue_id: {
-                bsonType: "objectId",
-
-                description:
-                    "Referencia lógica al documento de albergues"
+                bsonType: "objectId"
             },
 
             fecha: {
-                bsonType: "date",
-
-                description:
-                    "Día operativo normalizado a 00:00 America/Bogota"
+                bsonType: "date"
             },
 
             poblacion: {
                 bsonType: "int",
-                minimum: 0,
-
-                description:
-                    "Cantidad de personas alojadas. Debe ser mayor o igual a cero"
+                minimum: 0
             },
 
             litros_agua: {
@@ -458,62 +421,38 @@ const validatorRegistrosDiarios = {
                     "decimal"
                 ],
 
-                minimum: 0,
-
-                description:
-                    "Litros totales de agua disponibles durante el día"
+                minimum: 0
             },
 
             letrinas: {
                 bsonType: "int",
-                minimum: 0,
-
-                description:
-                    "Cantidad de letrinas disponibles"
+                minimum: 0
             },
 
             casos_eda: {
                 bsonType: "int",
-                minimum: 0,
-
-                description:
-                    "Casos nuevos de EDA reportados durante el día"
+                minimum: 0
             },
 
             casos_ira: {
                 bsonType: "int",
-                minimum: 0,
-
-                description:
-                    "Casos nuevos de IRA reportados durante el día"
+                minimum: 0
             },
 
             registrado_por: {
-                bsonType: "objectId",
-
-                description:
-                    "Referencia lógica al usuario responsable de la creación"
+                bsonType: "objectId"
             },
 
             created_at: {
-                bsonType: "date",
-
-                description:
-                    "Fecha y hora técnica original de creación"
+                bsonType: "date"
             },
 
             updated_at: {
-                bsonType: "date",
-
-                description:
-                    "Fecha y hora de la última modificación"
+                bsonType: "date"
             },
 
             updated_by: {
-                bsonType: "objectId",
-
-                description:
-                    "Referencia lógica al usuario responsable de la última modificación"
+                bsonType: "objectId"
             }
         }
     }
@@ -549,56 +488,39 @@ const validatorCondicionesSanitarias = {
         properties: {
 
             _id: {
-                bsonType: "objectId",
-                description:
-                    "Identificador único del registro"
+                bsonType: "objectId"
             },
 
             albergue_id: {
-                bsonType: "objectId",
-                description:
-                    "Referencia lógica a albergues._id"
+                bsonType: "objectId"
             },
 
             fecha: {
-                bsonType: "date",
-                description:
-                    "Fecha funcional de la condición sanitaria"
+                bsonType: "date"
             },
 
             agua_potable_disponible: {
-                bsonType: "bool",
-                description:
-                    "Indica disponibilidad de agua potable"
+                bsonType: "bool"
             },
 
             banos_disponibles: {
                 bsonType: "int",
-                minimum: 0,
-                description:
-                    "Cantidad de baños disponibles"
+                minimum: 0
             },
 
             estado_higiene: {
                 bsonType: "string",
-                minLength: 1,
-                description:
-                    "Estado de higiene. Catálogo funcional pendiente de definición"
+                minLength: 1
             },
 
             estado_saneamiento: {
                 bsonType: "string",
-                minLength: 1,
-                description:
-                    "Estado de saneamiento. Catálogo funcional pendiente de definición"
+                minLength: 1
             },
 
             otros_recursos_sanitarios: {
 
                 bsonType: "array",
-
-                description:
-                    "Otros recursos sanitarios disponibles",
 
                 items: {
 
@@ -615,62 +537,44 @@ const validatorCondicionesSanitarias = {
 
                         nombre: {
                             bsonType: "string",
-                            minLength: 1,
-                            description:
-                                "Nombre del recurso sanitario"
+                            minLength: 1
                         },
 
                         cantidad: {
                             bsonType: "int",
-                            minimum: 0,
-                            description:
-                                "Cantidad disponible del recurso"
+                            minimum: 0
                         },
 
                         observacion: {
-                            bsonType: "string",
-                            description:
-                                "Observación asociada al recurso"
+                            bsonType: "string"
                         }
                     }
                 }
             },
 
             observaciones: {
-                bsonType: "string",
-                description:
-                    "Observaciones generales del registro"
+                bsonType: "string"
             },
 
             fuente_datos: {
                 bsonType: "string",
-                minLength: 1,
-                description:
-                    "Origen del dato. Catálogo funcional pendiente de definición"
+                minLength: 1
             },
 
             registrado_por: {
-                bsonType: "objectId",
-                description:
-                    "Referencia lógica al usuario creador"
+                bsonType: "objectId"
             },
 
             created_at: {
-                bsonType: "date",
-                description:
-                    "Fecha y hora original de creación"
+                bsonType: "date"
             },
 
             updated_at: {
-                bsonType: "date",
-                description:
-                    "Fecha y hora de la última modificación"
+                bsonType: "date"
             },
 
             updated_by: {
-                bsonType: "objectId",
-                description:
-                    "Referencia lógica al usuario responsable de la última modificación"
+                bsonType: "objectId"
             }
         }
     }
@@ -704,10 +608,87 @@ const validatorCasosEnfermedades = {
         properties: {
 
             _id: {
+                bsonType: "objectId"
+            },
+
+            albergue_id: {
+                bsonType: "objectId"
+            },
+
+            fecha: {
+                bsonType: "date"
+            },
+
+            enfermedad: {
+                bsonType: "string",
+                minLength: 1
+            },
+
+            cantidad_casos_activos: {
+                bsonType: "int",
+                minimum: 0
+            },
+
+            observaciones: {
+                bsonType: "string"
+            },
+
+            fuente_datos: {
+                bsonType: "string",
+                minLength: 1
+            },
+
+            registrado_por: {
+                bsonType: "objectId"
+            },
+
+            created_at: {
+                bsonType: "date"
+            },
+
+            updated_at: {
+                bsonType: "date"
+            },
+
+            updated_by: {
+                bsonType: "objectId"
+            }
+        }
+    }
+};
+
+
+// ============================================================
+// 6. VALIDADOR - INTERVENCIONES
+// ============================================================
+
+const validatorIntervenciones = {
+    $jsonSchema: {
+
+        bsonType: "object",
+
+        title:
+            "Esquema de validación de intervenciones",
+
+        additionalProperties: false,
+
+        required: [
+            "albergue_id",
+            "fecha_intervencion",
+            "tipo_intervencion",
+            "descripcion",
+            "fuente_datos",
+            "registrado_por",
+            "created_at"
+        ],
+
+        properties: {
+
+            _id: {
                 bsonType: "objectId",
 
                 description:
-                    "Identificador único del registro"
+                    "Identificador único de la intervención"
             },
 
             albergue_id: {
@@ -717,36 +698,36 @@ const validatorCasosEnfermedades = {
                     "Referencia lógica a albergues._id"
             },
 
-            fecha: {
+            fecha_intervencion: {
                 bsonType: "date",
 
                 description:
-                    "Fecha funcional del registro epidemiológico"
+                    "Fecha funcional en la que fue ejecutada la intervención"
             },
 
-            enfermedad: {
+            tipo_intervencion: {
                 bsonType: "string",
 
                 minLength: 1,
 
                 description:
-                    "Enfermedad registrada. Catálogo funcional pendiente de definición"
+                    "Tipo de intervención ejecutada. Catálogo funcional pendiente de definición"
             },
 
-            cantidad_casos_activos: {
-                bsonType: "int",
+            descripcion: {
+                bsonType: "string",
 
-                minimum: 0,
+                minLength: 1,
 
                 description:
-                    "Cantidad de casos activos de la enfermedad en la fecha del registro"
+                    "Descripción de la intervención realmente ejecutada"
             },
 
             observaciones: {
                 bsonType: "string",
 
                 description:
-                    "Observaciones adicionales del registro epidemiológico"
+                    "Observaciones adicionales de la intervención"
             },
 
             fuente_datos: {
@@ -762,7 +743,7 @@ const validatorCasosEnfermedades = {
                 bsonType: "objectId",
 
                 description:
-                    "Referencia lógica al usuario responsable de la creación"
+                    "Referencia lógica al usuario creador"
             },
 
             created_at: {
@@ -791,7 +772,7 @@ const validatorCasosEnfermedades = {
 
 
 // ============================================================
-// 6. FUNCIÓN IDEMPOTENTE DE CREACIÓN / ACTUALIZACIÓN
+// 7. FUNCIÓN IDEMPOTENTE DE CREACIÓN / ACTUALIZACIÓN
 // ============================================================
 
 function crearOActualizarColeccion(
@@ -865,7 +846,7 @@ function crearOActualizarColeccion(
 
 
 // ============================================================
-// 7. CREAR / ACTUALIZAR COLECCIONES
+// 8. CREAR / ACTUALIZAR COLECCIONES
 // ============================================================
 
 crearOActualizarColeccion(
@@ -898,8 +879,14 @@ crearOActualizarColeccion(
 );
 
 
+crearOActualizarColeccion(
+    "intervenciones",
+    validatorIntervenciones
+);
+
+
 // ============================================================
-// 8. SCHEMA MIGRATIONS
+// 9. SCHEMA MIGRATIONS
 // ============================================================
 
 if (
@@ -927,7 +914,7 @@ if (
 
 
 // ============================================================
-// 9. ÍNDICES
+// 10. ÍNDICES
 // ============================================================
 
 print("");
@@ -935,7 +922,7 @@ print("Configurando índices...");
 
 
 // ------------------------------------------------------------
-// 9.1 usuarios.email único
+// 10.1 usuarios.email único
 // ------------------------------------------------------------
 
 db.usuarios.createIndex(
@@ -957,7 +944,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 9.2 usuarios.albergue_id
+// 10.2 usuarios.albergue_id
 // ------------------------------------------------------------
 
 db.usuarios.createIndex(
@@ -976,7 +963,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 9.3 albergues.codigo_albergue único
+// 10.3 albergues.codigo_albergue
 // ------------------------------------------------------------
 
 db.albergues.createIndex(
@@ -998,7 +985,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 9.4 registros_diarios por albergue + día
+// 10.4 registros_diarios albergue + fecha
 // ------------------------------------------------------------
 
 db.registros_diarios.createIndex(
@@ -1022,7 +1009,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 9.5 condiciones_sanitarias por albergue + fecha
+// 10.5 condiciones_sanitarias albergue + fecha
 // ------------------------------------------------------------
 
 db.condiciones_sanitarias.createIndex(
@@ -1043,7 +1030,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 9.6 casos_enfermedades por albergue + fecha
+// 10.6 casos_enfermedades albergue + fecha
 // ------------------------------------------------------------
 
 db.casos_enfermedades.createIndex(
@@ -1064,7 +1051,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 9.7 casos_enfermedades por albergue + enfermedad + fecha
+// 10.7 casos_enfermedades albergue + enfermedad + fecha
 // ------------------------------------------------------------
 
 db.casos_enfermedades.createIndex(
@@ -1086,7 +1073,50 @@ print(
 
 
 // ------------------------------------------------------------
-// 9.8 schema_migrations.version único
+// 10.8 intervenciones albergue + fecha
+// ------------------------------------------------------------
+
+db.intervenciones.createIndex(
+    {
+        albergue_id: 1,
+        fecha_intervencion: -1
+    },
+    {
+        name:
+            "ix_intervenciones_albergue_fecha"
+    }
+);
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_intervenciones_albergue_fecha"
+);
+
+
+// ------------------------------------------------------------
+// 10.9 intervenciones albergue + tipo + fecha
+// ------------------------------------------------------------
+
+db.intervenciones.createIndex(
+    {
+        albergue_id: 1,
+        tipo_intervencion: 1,
+        fecha_intervencion: -1
+    },
+    {
+        name:
+            "ix_intervenciones_albergue_tipo_fecha"
+    }
+);
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_intervenciones_albergue_tipo_fecha"
+);
+
+
+// ------------------------------------------------------------
+// 10.10 schema_migrations.version
 // ------------------------------------------------------------
 
 db.schema_migrations.createIndex(
@@ -1108,7 +1138,7 @@ print(
 
 
 // ============================================================
-// 10. RESULTADO
+// 11. RESULTADO
 // ============================================================
 
 print("");
