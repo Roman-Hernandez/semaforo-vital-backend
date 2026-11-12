@@ -12,24 +12,22 @@
 //   - casos_enfermedades
 //   - intervenciones
 //   - metricas_albergue
+//   - analisis_ia
 //   - schema_migrations
 //
 // Responsabilidad:
 //   - crear colecciones cuando no existan
 //   - actualizar validadores cuando ya existan
 //   - crear/verificar índices
-//   - permitir ejecución repetida sin generar duplicados
+//   - permitir ejecución repetida
 //
 // IMPORTANTE:
 //
 // Este archivo representa el estado estructural actual para
 // instalaciones nuevas.
 //
-// Las migraciones versionadas documentan la evolución de
-// ambientes existentes y NO deben modificarse retroactivamente.
-//
-// Base de datos:
-//   semaforo_vital
+// Las migraciones versionadas representan la evolución
+// histórica de ambientes existentes.
 // ============================================================
 
 db = db.getSiblingDB("semaforo_vital");
@@ -952,23 +950,6 @@ const validatorIntervenciones = {
 // ============================================================
 // 7. VALIDADOR - METRICAS ALBERGUE
 // ============================================================
-//
-// BUCKET PATTERN:
-//
-//   1 documento
-//   =
-//   1 albergue + 1 fecha_bucket
-//
-// COMPUTED PATTERN:
-//
-//   calculados
-//   ultima_medicion
-//   estado_actual
-//
-// estado_actual es opcional durante esta etapa porque las
-// colecciones alertas y estados_semaforo serán implementadas
-// posteriormente.
-// ============================================================
 
 const validatorMetricasAlbergue = {
 
@@ -1001,24 +982,17 @@ const validatorMetricasAlbergue = {
                     "objectId"
             },
 
-
             albergue_id: {
 
                 bsonType:
                     "objectId"
             },
 
-
             fecha_bucket: {
 
                 bsonType:
                     "date"
             },
-
-
-            // =================================================
-            // BUCKET PATTERN
-            // =================================================
 
             mediciones: {
 
@@ -1052,7 +1026,6 @@ const validatorMetricasAlbergue = {
                                 "date"
                         },
 
-
                         ph: {
 
                             bsonType: [
@@ -1065,7 +1038,6 @@ const validatorMetricasAlbergue = {
                             minimum:
                                 0
                         },
-
 
                         cloro_residual: {
 
@@ -1080,7 +1052,6 @@ const validatorMetricasAlbergue = {
                                 0
                         },
 
-
                         personas_alojadas: {
 
                             bsonType:
@@ -1089,7 +1060,6 @@ const validatorMetricasAlbergue = {
                             minimum:
                                 0
                         },
-
 
                         porcentaje_ocupacion: {
 
@@ -1106,11 +1076,6 @@ const validatorMetricasAlbergue = {
                     }
                 }
             },
-
-
-            // =================================================
-            // COMPUTED PATTERN
-            // =================================================
 
             calculados: {
 
@@ -1140,7 +1105,6 @@ const validatorMetricasAlbergue = {
                             1
                     },
 
-
                     suma_ph: {
 
                         bsonType: [
@@ -1153,7 +1117,6 @@ const validatorMetricasAlbergue = {
                         minimum:
                             0
                     },
-
 
                     suma_cloro_residual: {
 
@@ -1168,7 +1131,6 @@ const validatorMetricasAlbergue = {
                             0
                     },
 
-
                     promedio_ph: {
 
                         bsonType: [
@@ -1182,7 +1144,6 @@ const validatorMetricasAlbergue = {
                             0
                     },
 
-
                     promedio_cloro_residual: {
 
                         bsonType: [
@@ -1195,7 +1156,6 @@ const validatorMetricasAlbergue = {
                         minimum:
                             0
                     },
-
 
                     porcentaje_ocupacion: {
 
@@ -1211,11 +1171,6 @@ const validatorMetricasAlbergue = {
                     }
                 }
             },
-
-
-            // =================================================
-            // ÚLTIMA MEDICIÓN
-            // =================================================
 
             ultima_medicion: {
 
@@ -1241,7 +1196,6 @@ const validatorMetricasAlbergue = {
                             "date"
                     },
 
-
                     ph: {
 
                         bsonType: [
@@ -1254,7 +1208,6 @@ const validatorMetricasAlbergue = {
                         minimum:
                             0
                     },
-
 
                     cloro_residual: {
 
@@ -1269,7 +1222,6 @@ const validatorMetricasAlbergue = {
                             0
                     },
 
-
                     personas_alojadas: {
 
                         bsonType:
@@ -1278,7 +1230,6 @@ const validatorMetricasAlbergue = {
                         minimum:
                             0
                     },
-
 
                     porcentaje_ocupacion: {
 
@@ -1294,11 +1245,6 @@ const validatorMetricasAlbergue = {
                     }
                 }
             },
-
-
-            // =================================================
-            // SNAPSHOT COMPUTADO DEL ESTADO ACTUAL
-            // =================================================
 
             estado_actual: {
 
@@ -1342,7 +1288,6 @@ const validatorMetricasAlbergue = {
                         }
                     },
 
-
                     hacinamiento: {
 
                         bsonType:
@@ -1367,7 +1312,6 @@ const validatorMetricasAlbergue = {
                             }
                         }
                     },
-
 
                     semaforo_vital: {
 
@@ -1395,20 +1339,17 @@ const validatorMetricasAlbergue = {
                                     1
                             },
 
-
                             codigo: {
 
                                 bsonType:
                                     "int"
                             },
 
-
                             estado_semaforo_id: {
 
                                 bsonType:
                                     "objectId"
                             },
-
 
                             fecha_calculo: {
 
@@ -1417,7 +1358,6 @@ const validatorMetricasAlbergue = {
                             }
                         }
                     },
-
 
                     alertas_activas: {
 
@@ -1443,7 +1383,6 @@ const validatorMetricasAlbergue = {
                                     0
                             },
 
-
                             ids: {
 
                                 bsonType:
@@ -1463,13 +1402,11 @@ const validatorMetricasAlbergue = {
                 }
             },
 
-
             created_at: {
 
                 bsonType:
                     "date"
             },
-
 
             updated_at: {
 
@@ -1482,7 +1419,365 @@ const validatorMetricasAlbergue = {
 
 
 // ============================================================
-// 8. FUNCIÓN IDEMPOTENTE DE CREACIÓN / ACTUALIZACIÓN
+// 8. VALIDADOR - ANALISIS IA
+// ============================================================
+//
+// Colección histórica.
+//
+// Cada ejecución IA genera un documento nuevo.
+//
+// No se utilizan updated_at / updated_by.
+//
+// escenario_id es opcional hasta implementar escenarios.
+// ============================================================
+
+const validatorAnalisisIA = {
+
+    $jsonSchema: {
+
+        bsonType:
+            "object",
+
+        title:
+            "Esquema de validación de análisis IA",
+
+        additionalProperties:
+            false,
+
+        required: [
+            "albergue_id",
+            "fecha_ejecucion",
+            "periodo_analizado",
+            "modelo",
+            "datos_entrada",
+            "preprocesamiento",
+            "resultado",
+            "registrado_por",
+            "created_at"
+        ],
+
+        properties: {
+
+            _id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            albergue_id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            escenario_id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            fecha_ejecucion: {
+
+                bsonType:
+                    "date"
+            },
+
+            periodo_analizado: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+                    "fecha_inicio",
+                    "fecha_fin"
+                ],
+
+                properties: {
+
+                    fecha_inicio: {
+
+                        bsonType:
+                            "date"
+                    },
+
+                    fecha_fin: {
+
+                        bsonType:
+                            "date"
+                    }
+                }
+            },
+
+            modelo: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+                    "nombre",
+                    "version"
+                ],
+
+                properties: {
+
+                    nombre: {
+
+                        bsonType:
+                            "string",
+
+                        minLength:
+                            1
+                    },
+
+                    version: {
+
+                        bsonType:
+                            "string",
+
+                        minLength:
+                            1
+                    }
+                }
+            },
+
+            datos_entrada: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+                    "registros_diarios_ids",
+                    "condiciones_sanitarias_ids",
+                    "casos_enfermedades_ids",
+                    "intervenciones_ids",
+                    "metricas_albergue_ids"
+                ],
+
+                properties: {
+
+                    registros_diarios_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+                    condiciones_sanitarias_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+                    casos_enfermedades_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+                    intervenciones_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+                    metricas_albergue_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    }
+                }
+            },
+
+            preprocesamiento: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+                    "registros_considerados",
+                    "registros_descartados",
+                    "datos_faltantes"
+                ],
+
+                properties: {
+
+                    registros_considerados: {
+
+                        bsonType:
+                            "int",
+
+                        minimum:
+                            0
+                    },
+
+                    registros_descartados: {
+
+                        bsonType:
+                            "int",
+
+                        minimum:
+                            0
+                    },
+
+                    datos_faltantes: {
+
+                        bsonType:
+                            "array",
+
+                        items: {
+
+                            bsonType:
+                                "object",
+
+                            additionalProperties:
+                                false,
+
+                            required: [
+                                "campo",
+                                "cantidad",
+                                "tratamiento"
+                            ],
+
+                            properties: {
+
+                                campo: {
+
+                                    bsonType:
+                                        "string",
+
+                                    minLength:
+                                        1
+                                },
+
+                                cantidad: {
+
+                                    bsonType:
+                                        "int",
+
+                                    minimum:
+                                        0
+                                },
+
+                                tratamiento: {
+
+                                    bsonType:
+                                        "string",
+
+                                    minLength:
+                                        1
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
+            resultado: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+                    "probabilidad_riesgo"
+                ],
+
+                properties: {
+
+                    probabilidad_riesgo: {
+
+                        bsonType: [
+                            "double",
+                            "int",
+                            "long",
+                            "decimal"
+                        ],
+
+                        minimum:
+                            0,
+
+                        maximum:
+                            1
+                    }
+                }
+            },
+
+            registrado_por: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            created_at: {
+
+                bsonType:
+                    "date"
+            }
+        }
+    }
+};
+
+
+// ============================================================
+// 9. FUNCIÓN IDEMPOTENTE
 // ============================================================
 
 function crearOActualizarColeccion(
@@ -1560,7 +1855,7 @@ function crearOActualizarColeccion(
 
 
 // ============================================================
-// 9. CREAR / ACTUALIZAR COLECCIONES
+// 10. CREAR / ACTUALIZAR COLECCIONES
 // ============================================================
 
 crearOActualizarColeccion(
@@ -1605,8 +1900,14 @@ crearOActualizarColeccion(
 );
 
 
+crearOActualizarColeccion(
+    "analisis_ia",
+    validatorAnalisisIA
+);
+
+
 // ============================================================
-// 10. SCHEMA MIGRATIONS
+// 11. SCHEMA MIGRATIONS
 // ============================================================
 
 if (
@@ -1635,7 +1936,7 @@ if (
 
 
 // ============================================================
-// 11. ÍNDICES
+// 12. ÍNDICES
 // ============================================================
 
 print("");
@@ -1643,7 +1944,7 @@ print("Configurando índices...");
 
 
 // ------------------------------------------------------------
-// 11.1 usuarios.email único
+// usuarios
 // ------------------------------------------------------------
 
 db.usuarios.createIndex(
@@ -1666,10 +1967,6 @@ print(
 );
 
 
-// ------------------------------------------------------------
-// 11.2 usuarios.albergue_id
-// ------------------------------------------------------------
-
 db.usuarios.createIndex(
     {
         albergue_id:
@@ -1688,7 +1985,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 11.3 albergues.codigo_albergue
+// albergues
 // ------------------------------------------------------------
 
 db.albergues.createIndex(
@@ -1713,7 +2010,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 11.4 registros_diarios albergue + fecha
+// registros_diarios
 // ------------------------------------------------------------
 
 db.registros_diarios.createIndex(
@@ -1741,7 +2038,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 11.5 condiciones_sanitarias albergue + fecha
+// condiciones_sanitarias
 // ------------------------------------------------------------
 
 db.condiciones_sanitarias.createIndex(
@@ -1766,7 +2063,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 11.6 casos_enfermedades albergue + fecha
+// casos_enfermedades
 // ------------------------------------------------------------
 
 db.casos_enfermedades.createIndex(
@@ -1789,10 +2086,6 @@ print(
     "ix_casos_enfermedades_albergue_fecha"
 );
 
-
-// ------------------------------------------------------------
-// 11.7 casos_enfermedades albergue + enfermedad + fecha
-// ------------------------------------------------------------
 
 db.casos_enfermedades.createIndex(
     {
@@ -1819,7 +2112,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 11.8 intervenciones albergue + fecha
+// intervenciones
 // ------------------------------------------------------------
 
 db.intervenciones.createIndex(
@@ -1842,10 +2135,6 @@ print(
     "ix_intervenciones_albergue_fecha"
 );
 
-
-// ------------------------------------------------------------
-// 11.9 intervenciones albergue + tipo + fecha
-// ------------------------------------------------------------
 
 db.intervenciones.createIndex(
     {
@@ -1872,17 +2161,7 @@ print(
 
 
 // ------------------------------------------------------------
-// 11.10 metricas_albergue albergue + fecha_bucket
-// ------------------------------------------------------------
-//
-// Regla Bucket Pattern:
-//
-// Solo puede existir:
-//
-//   1 bucket
-//   por
-//   albergue + fecha_bucket
-//
+// metricas_albergue
 // ------------------------------------------------------------
 
 db.metricas_albergue.createIndex(
@@ -1910,7 +2189,61 @@ print(
 
 
 // ------------------------------------------------------------
-// 11.11 schema_migrations.version
+// analisis_ia
+// ------------------------------------------------------------
+//
+// Histórico.
+//
+// Ninguno de estos índices debe ser UNIQUE.
+// ------------------------------------------------------------
+
+db.analisis_ia.createIndex(
+    {
+        albergue_id:
+            1,
+
+        fecha_ejecucion:
+            -1
+    },
+    {
+        name:
+            "ix_analisis_ia_albergue_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_analisis_ia_albergue_fecha"
+);
+
+
+db.analisis_ia.createIndex(
+    {
+        "modelo.nombre":
+            1,
+
+        "modelo.version":
+            1,
+
+        fecha_ejecucion:
+            -1
+    },
+    {
+        name:
+            "ix_analisis_ia_modelo_version_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_analisis_ia_modelo_version_fecha"
+);
+
+
+// ------------------------------------------------------------
+// schema_migrations
 // ------------------------------------------------------------
 
 db.schema_migrations.createIndex(
@@ -1935,7 +2268,7 @@ print(
 
 
 // ============================================================
-// 12. RESULTADO
+// 13. RESULTADO
 // ============================================================
 
 print("");
@@ -1961,6 +2294,14 @@ print(
 
 print(
     "✓ Computed Pattern disponible en metricas_albergue"
+);
+
+print(
+    "✓ analisis_ia histórico disponible"
+);
+
+print(
+    "✓ Trazabilidad de entradas IA disponible"
 );
 
 print(
