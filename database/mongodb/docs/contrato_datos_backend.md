@@ -13,31 +13,49 @@ Su objetivo es evitar inconsistencias durante la integración del backend, espec
 - registros diarios;
 - condiciones sanitarias;
 - casos de enfermedades;
+- intervenciones reales;
 - casos EDA e IRA;
 - evolución futura de los esquemas.
 
 La base de datos utilizada es:
 
-`semaforo_vital`
+```text
+semaforo_vital
+```
 
 ---
 
-## 2. Colecciones principales
+# 2. Colecciones principales
 
 Actualmente el modelo operativo utiliza las siguientes colecciones:
 
-- `usuarios`
-- `albergues`
-- `registros_diarios`
-- `condiciones_sanitarias`
-- `casos_enfermedades`
-- `schema_migrations`
+```text
+usuarios
+albergues
+registros_diarios
+condiciones_sanitarias
+casos_enfermedades
+intervenciones
+schema_migrations
+```
 
-La colección conceptual solicitada inicialmente como `users` fue implementada por backend como `usuarios`.
+La colección:
+
+```text
+schema_migrations
+```
+
+es técnica y permite controlar la evolución versionada de la estructura de MongoDB.
+
+La colección conceptual solicitada inicialmente como `users` fue implementada por backend como:
+
+```text
+usuarios
+```
 
 Por compatibilidad con el login existente, el contrato vigente mantiene los nombres ya implementados.
 
-### Equivalencias conceptuales
+## 2.1 Equivalencias conceptuales
 
 | Concepto solicitado | Implementación vigente |
 |---|---|
@@ -48,7 +66,7 @@ Por compatibilidad con el login existente, el contrato vigente mantiene los nomb
 | estado | `active` |
 | correo normalizado | `email` |
 
-Estos nombres no deben modificarse unilateralmente desde la capa de base de datos, ya que forman parte del contrato utilizado actualmente por autenticación.
+Estos nombres no deben modificarse unilateralmente desde la capa de base de datos, ya que forman parte del contrato utilizado actualmente por autenticación y persistencia.
 
 ---
 
@@ -62,9 +80,15 @@ La contraseña nunca debe almacenarse en texto plano.
 
 MongoDB almacena exclusivamente:
 
-`password_hash`
+```text
+password_hash
+```
 
-El mecanismo actual de autenticación utiliza hashes Argon2id.
+El mecanismo actual de autenticación utiliza hashes:
+
+```text
+Argon2id
+```
 
 ---
 
@@ -110,8 +134,10 @@ Debe contener un hash Argon2id.
 
 Valores permitidos:
 
-- `super_administrador`
-- `administrador_albergue`
+```text
+super_administrador
+administrador_albergue
+```
 
 `active`
 
@@ -119,7 +145,17 @@ Indica si el usuario se encuentra habilitado.
 
 `albergue_id`
 
-Para `super_administrador` debe ser `null`.
+Para:
+
+```text
+super_administrador
+```
+
+debe ser:
+
+```text
+null
+```
 
 ---
 
@@ -153,17 +189,29 @@ Para `super_administrador` debe ser `null`.
 
 Para:
 
-`role = administrador_albergue`
+```text
+role = administrador_albergue
+```
 
 el campo:
 
-`albergue_id`
+```text
+albergue_id
+```
 
-es obligatorio y debe ser `ObjectId`.
+es obligatorio y debe ser:
 
-Además, debe corresponder a un documento existente en `albergues`.
+```text
+ObjectId
+```
 
-MongoDB `$jsonSchema` puede validar el tipo, pero no aplica claves foráneas.
+Además, debe corresponder a un documento existente en:
+
+```text
+albergues
+```
+
+MongoDB `$jsonSchema` puede validar el tipo BSON, pero no aplica claves foráneas tradicionales.
 
 ---
 
@@ -213,15 +261,21 @@ Ejemplo:
 }
 ```
 
+---
+
 ## 4.2 Código funcional
 
 `codigo_albergue` identifica funcionalmente el albergue.
 
 Existe el índice único:
 
-`ux_albergues_codigo_albergue`
+```text
+ux_albergues_codigo_albergue
+```
 
 No pueden existir dos albergues con el mismo código.
+
+---
 
 ## 4.3 Coordenadas
 
@@ -237,19 +291,31 @@ La ubicación utiliza GeoJSON:
 }
 ```
 
+El orden es:
+
+```text
+[longitud, latitud]
+```
+
+---
+
 ## 4.4 Trazabilidad
 
 `registrado_por`
 
 Debe corresponder a:
 
-`usuarios._id`
+```text
+usuarios._id
+```
 
 `updated_by`
 
 Cuando exista, también debe corresponder a:
 
-`usuarios._id`
+```text
+usuarios._id
+```
 
 ---
 
@@ -261,7 +327,9 @@ Cuando exista, también debe corresponder a:
 
 Existe un índice único compuesto:
 
-`ux_registros_diarios_albergue_fecha`
+```text
+ux_registros_diarios_albergue_fecha
+```
 
 sobre:
 
@@ -328,19 +396,27 @@ casos_ira   >= 0
 
 La zona horaria funcional del proyecto es:
 
-`America/Bogota`
+```text
+America/Bogota
+```
 
 Una fecha funcional:
 
-`2026-10-14`
+```text
+2026-10-14
+```
 
 representa:
 
-`2026-10-14 00:00:00 America/Bogota`
+```text
+2026-10-14 00:00:00 America/Bogota
+```
 
 MongoDB almacena el instante UTC equivalente:
 
-`2026-10-14T05:00:00.000Z`
+```text
+2026-10-14T05:00:00.000Z
+```
 
 Por tanto:
 
@@ -350,13 +426,41 @@ Por tanto:
 2026-10-14 05:00 UTC
 ```
 
-La aplicación no debe normalizar días operativos utilizando `00:00 UTC`.
+La aplicación no debe normalizar días operativos utilizando:
+
+```text
+00:00 UTC
+```
 
 Para datos diarios se recomienda recibir:
 
-`YYYY-MM-DD`
+```text
+YYYY-MM-DD
+```
 
-y normalizar utilizando `America/Bogota`.
+y normalizar utilizando:
+
+```text
+America/Bogota
+```
+
+Campos como:
+
+```text
+fecha
+fecha_intervencion
+```
+
+representan fechas funcionales.
+
+En cambio:
+
+```text
+created_at
+updated_at
+```
+
+representan instantes técnicos reales de creación o modificación.
 
 ---
 
@@ -364,11 +468,10 @@ y normalizar utilizando `America/Bogota`.
 
 Los campos:
 
-`registros_diarios.casos_eda`
-
-y:
-
-`registros_diarios.casos_ira`
+```text
+registros_diarios.casos_eda
+registros_diarios.casos_ira
+```
 
 representan:
 
@@ -449,11 +552,20 @@ casos_enfermedades.registrado_por
 
 casos_enfermedades.updated_by
     → usuarios._id
+
+intervenciones.albergue_id
+    → albergues._id
+
+intervenciones.registrado_por
+    → usuarios._id
+
+intervenciones.updated_by
+    → usuarios._id
 ```
 
 `$jsonSchema` garantiza tipos BSON.
 
-Ejemplo:
+Por ejemplo:
 
 ```text
 albergue_id debe ser ObjectId
@@ -493,18 +605,20 @@ No debe sustituirse para indicar quién realizó una actualización.
 
 Los esquemas de:
 
-- `albergues`
-- `registros_diarios`
-- `condiciones_sanitarias`
-- `casos_enfermedades`
+```text
+albergues
+registros_diarios
+condiciones_sanitarias
+casos_enfermedades
+intervenciones
+```
 
 permiten:
 
-`updated_at`
-
-y:
-
-`updated_by`
+```text
+updated_at
+updated_by
+```
 
 `updated_at`
 
@@ -530,8 +644,10 @@ Ejemplo:
 
 Un documento nunca modificado puede no contener:
 
-- `updated_at`
-- `updated_by`
+```text
+updated_at
+updated_by
+```
 
 ---
 
@@ -548,7 +664,13 @@ Por tanto:
 
 > La implementación actual no constituye un sistema completo de auditoría histórica de versiones.
 
-La colección `auditoria_actividades` será incorporada posteriormente dentro del alcance DBA aprobado para cubrir auditoría funcional de acciones.
+La colección:
+
+```text
+auditoria_actividades
+```
+
+será incorporada posteriormente dentro del alcance DBA aprobado para cubrir auditoría funcional de acciones.
 
 ---
 
@@ -558,37 +680,57 @@ La colección `auditoria_actividades` será incorporada posteriormente dentro de
 
 Correo único:
 
-`ux_usuarios_email`
+```text
+ux_usuarios_email
+```
 
 Consulta por albergue:
 
-`ix_usuarios_albergue_id`
+```text
+ix_usuarios_albergue_id
+```
+
+---
 
 ## 11.2 `albergues`
 
 Código único:
 
-`ux_albergues_codigo_albergue`
+```text
+ux_albergues_codigo_albergue
+```
+
+---
 
 ## 11.3 `registros_diarios`
 
 Registro consolidado único:
 
-`ux_registros_diarios_albergue_fecha`
+```text
+ux_registros_diarios_albergue_fecha
+```
+
+---
 
 ## 11.4 `condiciones_sanitarias`
 
 Consulta por albergue y fecha:
 
-`ix_condiciones_sanitarias_albergue_fecha`
+```text
+ix_condiciones_sanitarias_albergue_fecha
+```
 
 No es único.
+
+---
 
 ## 11.5 `casos_enfermedades`
 
 Consulta temporal:
 
-`ix_casos_enfermedades_albergue_fecha`
+```text
+ix_casos_enfermedades_albergue_fecha
+```
 
 sobre:
 
@@ -601,7 +743,9 @@ sobre:
 
 Consulta histórica por enfermedad:
 
-`ix_casos_enfermedades_albergue_enfermedad_fecha`
+```text
+ix_casos_enfermedades_albergue_enfermedad_fecha
+```
 
 sobre:
 
@@ -617,13 +761,64 @@ Los índices no son únicos.
 
 Actualmente no existe una regla funcional aprobada que limite a un único registro por:
 
-`albergue + enfermedad + fecha`
+```text
+albergue + enfermedad + fecha
+```
 
-## 11.6 `schema_migrations`
+---
+
+## 11.6 `intervenciones`
+
+Consulta temporal por albergue:
+
+```text
+ix_intervenciones_albergue_fecha
+```
+
+sobre:
+
+```javascript
+{
+    albergue_id: 1,
+    fecha_intervencion: -1
+}
+```
+
+Consulta histórica por tipo de intervención:
+
+```text
+ix_intervenciones_albergue_tipo_fecha
+```
+
+sobre:
+
+```javascript
+{
+    albergue_id: 1,
+    tipo_intervencion: 1,
+    fecha_intervencion: -1
+}
+```
+
+Ambos índices son:
+
+```text
+NO UNIQUE
+```
+
+Esto permite registrar varias intervenciones sobre el mismo albergue y fecha.
+
+También permite registrar varias intervenciones del mismo tipo y fecha cuando representan acciones reales independientes.
+
+---
+
+## 11.7 `schema_migrations`
 
 Versión única:
 
-`ux_schema_migrations_version`
+```text
+ux_schema_migrations_version
+```
 
 ---
 
@@ -640,9 +835,14 @@ Actualmente existen:
 004_add_update_traceability.js
 005_create_condiciones_sanitarias.js
 006_create_casos_enfermedades.js
+007_create_intervenciones.js
 ```
 
-La migración `001` fue ejecutada antes de la creación de `schema_migrations`.
+La migración `001` fue ejecutada antes de la creación de:
+
+```text
+schema_migrations
+```
 
 Por esa razón puede no aparecer registrada históricamente.
 
@@ -650,7 +850,9 @@ No debe inventarse una fecha de ejecución.
 
 Las migraciones posteriores utilizan:
 
-`schema_migrations`
+```text
+schema_migrations
+```
 
 y deben tener versiones únicas.
 
@@ -658,7 +860,9 @@ y deben tener versiones únicas.
 
 ## 12.1 Migración 005
 
-`005_create_condiciones_sanitarias.js`
+```text
+005_create_condiciones_sanitarias.js
+```
 
 incorporó:
 
@@ -673,7 +877,9 @@ incorporó:
 
 ## 12.2 Migración 006
 
-`006_create_casos_enfermedades.js`
+```text
+006_create_casos_enfermedades.js
+```
 
 incorporó:
 
@@ -685,6 +891,35 @@ incorporó:
 - trazabilidad;
 - controles de referencias lógicas;
 - registro en `schema_migrations`.
+
+---
+
+## 12.3 Migración 007
+
+```text
+007_create_intervenciones.js
+```
+
+incorporó:
+
+- colección `intervenciones`;
+- `$jsonSchema`;
+- validación `strict`;
+- índice `ix_intervenciones_albergue_fecha`;
+- índice `ix_intervenciones_albergue_tipo_fecha`;
+- trazabilidad de creación y modificación;
+- controles de referencias lógicas;
+- registro en `schema_migrations`;
+- verificación de la migración anterior;
+- verificación final de índices y registro de migración.
+
+La migración requiere que:
+
+```text
+006_create_casos_enfermedades
+```
+
+se encuentre aplicada exactamente una vez.
 
 ---
 
@@ -711,17 +946,31 @@ No debe inventarse información para completar documentos históricos.
 
 # 14. Datos semilla
 
-`seed_semaforo_vital.js` es reejecutable.
+```text
+seed_semaforo_vital.js
+```
+
+es reejecutable.
 
 Los datos semilla utilizan identificadores determinísticos cuando corresponde.
 
-Para `registrado_por` se utiliza un usuario real:
+Para:
 
-`super_administrador`
+```text
+registrado_por
+```
+
+se utiliza un usuario real:
+
+```text
+super_administrador
+```
 
 con:
 
-`active = true`
+```text
+active = true
+```
 
 No deben utilizarse usuarios ficticios como referencia.
 
@@ -731,7 +980,9 @@ No deben utilizarse usuarios ficticios como referencia.
 
 El archivo:
 
-`database/mongodb/init/init_semaforo_vital.js`
+```text
+database/mongodb/init/init_semaforo_vital.js
+```
 
 representa el estado estructural vigente.
 
@@ -743,20 +994,27 @@ albergues
 registros_diarios
 condiciones_sanitarias
 casos_enfermedades
+intervenciones
 schema_migrations
 ```
 
 Si una colección no existe:
 
-`createCollection`
+```text
+createCollection
+```
 
 Si existe:
 
-`collMod`
+```text
+collMod
+```
 
 Los índices se crean o verifican de manera reejecutable.
 
 La ejecución repetida no debe generar documentos ni índices duplicados.
+
+La inicialización reproduce el estado estructural vigente, mientras que las migraciones conservan el historial de evolución de ambientes existentes.
 
 ---
 
@@ -780,6 +1038,8 @@ MongoDB y los componentes DBA garantizan:
 - pruebas de integridad;
 - contrato de persistencia.
 
+---
+
 ## 16.2 Aplicación / Backend
 
 La aplicación debe garantizar:
@@ -795,7 +1055,12 @@ La aplicación debe garantizar:
 - asignación correcta de `updated_at`;
 - protección de `created_at`;
 - interpretación correcta de la semántica de cada campo;
-- manejo de errores de validación e integridad.
+- manejo de errores de validación e integridad;
+- diferenciar intervenciones reales de intervenciones simuladas.
+
+La capa DBA define el contrato.
+
+La implementación de lógica de negocio correspondiente pertenece al backend.
 
 ---
 
@@ -807,7 +1072,9 @@ Existen diferentes suites DBA.
 
 Archivo:
 
-`database/mongodb/tests/test_validaciones.js`
+```text
+database/mongodb/tests/test_validaciones.js
+```
 
 Resultado esperado:
 
@@ -822,7 +1089,9 @@ Pruebas fallidas: 0
 
 Archivo:
 
-`database/mongodb/tests/test_integridad_qa.js`
+```text
+database/mongodb/tests/test_integridad_qa.js
+```
 
 Resultado:
 
@@ -837,7 +1106,9 @@ Resultado:
 
 Archivo:
 
-`database/mongodb/tests/test_condiciones_sanitarias.js`
+```text
+database/mongodb/tests/test_condiciones_sanitarias.js
+```
 
 Resultado validado:
 
@@ -864,7 +1135,9 @@ Valida:
 
 Archivo:
 
-`database/mongodb/tests/test_casos_enfermedades.js`
+```text
+database/mongodb/tests/test_casos_enfermedades.js
+```
 
 Resultado validado:
 
@@ -888,8 +1161,55 @@ Valida:
 - rechazo de propiedades adicionales;
 - `updated_at`;
 - `updated_by`;
-- ambos índices epidemiológicos;
+- índices epidemiológicos;
 - detección de referencias huérfanas.
+
+---
+
+## 17.5 Intervenciones
+
+Archivo:
+
+```text
+database/mongodb/tests/test_intervenciones.js
+```
+
+Resultado validado:
+
+```text
+Pruebas exitosas: 15
+Pruebas fallidas: 0
+```
+
+La suite valida:
+
+- documento válido;
+- obligatoriedad de `albergue_id`;
+- obligatoriedad de `fecha_intervencion`;
+- obligatoriedad de `tipo_intervencion`;
+- obligatoriedad de `descripcion`;
+- obligatoriedad de `fuente_datos`;
+- rechazo de `tipo_intervencion` vacío;
+- rechazo de `descripcion` vacía;
+- tipo BSON de `fecha_intervencion`;
+- tipo BSON de `registrado_por`;
+- rechazo de propiedades adicionales;
+- trazabilidad mediante `updated_at` y `updated_by`;
+- múltiples intervenciones del mismo tipo y fecha;
+- existencia de los índices;
+- detección de referencias huérfanas mediante `$lookup`.
+
+La suite fue ejecutada nuevamente después de actualizar:
+
+```text
+init_semaforo_vital.js
+```
+
+y conservó:
+
+```text
+15/15
+```
 
 ---
 
@@ -925,7 +1245,11 @@ debe realizarse mediante:
 
 Almacena las condiciones sanitarias observadas en un albergue para una fecha determinada.
 
-Complementa `registros_diarios`.
+Complementa:
+
+```text
+registros_diarios
+```
 
 No reemplaza ni duplica el registro diario consolidado.
 
@@ -1001,7 +1325,11 @@ fuente_datos
 
 se encuentran pendientes de definición funcional.
 
-Actualmente se validan como `String` no vacío.
+Actualmente se validan como:
+
+```text
+String no vacío
+```
 
 No deben incorporarse valores `enum` unilateralmente desde la base de datos.
 
@@ -1009,7 +1337,11 @@ No deben incorporarse valores `enum` unilateralmente desde la base de datos.
 
 ## 19.5 Índice
 
-`ix_condiciones_sanitarias_albergue_fecha`
+```text
+ix_condiciones_sanitarias_albergue_fecha
+```
+
+sobre:
 
 ```javascript
 {
@@ -1115,8 +1447,6 @@ Tampoco significa:
 
 ## 20.5 Diferencia frente a `registros_diarios`
 
-Esta diferencia es obligatoria para todas las capas consumidoras.
-
 ### `registros_diarios.casos_eda`
 
 Representa:
@@ -1149,7 +1479,7 @@ casos activos EDA = 6
 
 Esto puede ocurrir porque:
 
-- aparecen 2 casos nuevos;
+- aparecen casos nuevos;
 - algunos casos anteriores continúan activos;
 - otros pueden haberse recuperado.
 
@@ -1163,7 +1493,9 @@ Por tanto, ambos valores cumplen propósitos diferentes y no deben intercambiars
 
 Debe ser:
 
-`String`
+```text
+String
+```
 
 con longitud mínima de 1.
 
@@ -1171,21 +1503,17 @@ con longitud mínima de 1.
 
 Debe ser:
 
-`Int32`
-
-y:
-
 ```text
->= 0
+Int32 >= 0
 ```
 
 `fuente_datos`
 
 Debe ser:
 
-`String`
-
-no vacío.
+```text
+String no vacío
+```
 
 ---
 
@@ -1195,7 +1523,9 @@ El catálogo oficial de enfermedades se encuentra pendiente de definición funci
 
 Por esta razón:
 
-`enfermedad`
+```text
+enfermedad
+```
 
 permanece como `String` abierto.
 
@@ -1209,11 +1539,17 @@ No debe agregarse unilateralmente desde la capa DBA hasta contar con definición
 
 El catálogo de:
 
-`fuente_datos`
+```text
+fuente_datos
+```
 
 también se encuentra pendiente.
 
-Actualmente se valida únicamente como `String` no vacío.
+Actualmente se valida únicamente como:
+
+```text
+String no vacío
+```
 
 ---
 
@@ -1230,11 +1566,19 @@ casos_enfermedades.updated_by
     → usuarios._id
 ```
 
-MongoDB valida el tipo `ObjectId`.
+MongoDB valida el tipo:
+
+```text
+ObjectId
+```
 
 La existencia efectiva debe comprobarse desde la aplicación.
 
-Los controles DBA pueden detectar referencias huérfanas mediante `$lookup`.
+Los controles DBA pueden detectar referencias huérfanas mediante:
+
+```text
+$lookup
+```
 
 ---
 
@@ -1242,7 +1586,9 @@ Los controles DBA pueden detectar referencias huérfanas mediante `$lookup`.
 
 Primer índice:
 
-`ix_casos_enfermedades_albergue_fecha`
+```text
+ix_casos_enfermedades_albergue_fecha
+```
 
 ```javascript
 {
@@ -1251,11 +1597,11 @@ Primer índice:
 }
 ```
 
-Permite consultar la situación epidemiológica histórica de un albergue.
-
 Segundo índice:
 
-`ix_casos_enfermedades_albergue_enfermedad_fecha`
+```text
+ix_casos_enfermedades_albergue_enfermedad_fecha
+```
 
 ```javascript
 {
@@ -1265,13 +1611,7 @@ Segundo índice:
 }
 ```
 
-Permite consultar la evolución histórica de una enfermedad determinada dentro de un albergue.
-
 Ninguno es único.
-
-Actualmente no existe una regla funcional aprobada de:
-
-> un único registro por albergue + enfermedad + fecha.
 
 ---
 
@@ -1279,7 +1619,9 @@ Actualmente no existe una regla funcional aprobada de:
 
 La colección fue incorporada mediante:
 
-`006_create_casos_enfermedades.js`
+```text
+006_create_casos_enfermedades.js
+```
 
 La migración:
 
@@ -1302,17 +1644,19 @@ La migración ya aplicada no debe modificarse retroactivamente.
 
 `init_semaforo_vital.js` contiene el contrato estructural vigente de:
 
-`casos_enfermedades`
+```text
+casos_enfermedades
+```
 
 En una instalación nueva crea la colección.
 
 En una instalación existente utiliza:
 
-`collMod`
+```text
+collMod
+```
 
 para garantizar que el validador sea el vigente.
-
-También crea o verifica los índices correspondientes.
 
 ---
 
@@ -1320,7 +1664,9 @@ También crea o verifica los índices correspondientes.
 
 Archivo:
 
-`database/mongodb/tests/test_casos_enfermedades.js`
+```text
+database/mongodb/tests/test_casos_enfermedades.js
+```
 
 Resultado validado:
 
@@ -1329,6 +1675,525 @@ Pruebas exitosas: 14
 Pruebas fallidas: 0
 ```
 
-Las pruebas fueron ejecutadas nuevamente después de actualizar `init_semaforo_vital.js`.
+---
 
-Esto confirma que la inicialización reproducible conserva correctamente el contrato de la colección.
+# 21. Colección `intervenciones`
+
+## 21.1 Propósito
+
+La colección:
+
+```text
+intervenciones
+```
+
+almacena las acciones reales ejecutadas sobre los albergues.
+
+Una intervención debe representar:
+
+> Una acción que efectivamente ocurrió.
+
+No debe representar una propuesta, una simulación ni un escenario hipotético.
+
+Esta separación es necesaria porque posteriormente el proyecto incorporará escenarios simulados.
+
+---
+
+## 21.2 Documento válido
+
+```javascript
+{
+    _id: ObjectId("..."),
+
+    albergue_id: ObjectId("..."),
+
+    fecha_intervencion: ISODate("..."),
+
+    tipo_intervencion: "saneamiento",
+
+    descripcion:
+        "Jornada de saneamiento ejecutada en el albergue",
+
+    observaciones:
+        "Actividad completada sin novedades",
+
+    fuente_datos:
+        "registro_manual",
+
+    registrado_por:
+        ObjectId("..."),
+
+    created_at:
+        ISODate("..."),
+
+    updated_at:
+        ISODate("..."),
+
+    updated_by:
+        ObjectId("...")
+}
+```
+
+---
+
+## 21.3 Campos obligatorios
+
+```text
+albergue_id
+fecha_intervencion
+tipo_intervencion
+descripcion
+fuente_datos
+registrado_por
+created_at
+```
+
+Campos opcionales:
+
+```text
+observaciones
+updated_at
+updated_by
+```
+
+---
+
+## 21.4 Semántica
+
+`fecha_intervencion`
+
+Representa:
+
+> La fecha funcional en la que la acción fue ejecutada.
+
+`tipo_intervencion`
+
+Representa:
+
+> La clasificación funcional de la acción ejecutada.
+
+`descripcion`
+
+Representa:
+
+> La descripción de la intervención realmente realizada.
+
+`observaciones`
+
+Permite almacenar información adicional sobre la acción.
+
+`fuente_datos`
+
+Identifica el origen del registro.
+
+---
+
+## 21.5 Intervenciones reales y simuladas
+
+Esta distinción es obligatoria.
+
+### `intervenciones`
+
+Contiene:
+
+> Acciones reales ejecutadas.
+
+Ejemplo:
+
+```text
+Se realizó una jornada de desinfección el 12 de noviembre.
+```
+
+Debe persistirse en:
+
+```text
+intervenciones
+```
+
+### `escenarios.intervenciones_simuladas`
+
+Contendrá posteriormente:
+
+> Acciones hipotéticas utilizadas para evaluar escenarios.
+
+Ejemplo:
+
+```text
+¿Qué ocurriría si se instalaran 5 letrinas adicionales?
+```
+
+No debe persistirse como una intervención real.
+
+La estructura correspondiente a escenarios será implementada posteriormente dentro de su checkpoint DBA.
+
+---
+
+## 21.6 Validaciones
+
+`albergue_id`
+
+Debe ser:
+
+```text
+ObjectId
+```
+
+`fecha_intervencion`
+
+Debe ser:
+
+```text
+Date
+```
+
+`tipo_intervencion`
+
+Debe ser:
+
+```text
+String no vacío
+```
+
+`descripcion`
+
+Debe ser:
+
+```text
+String no vacío
+```
+
+`fuente_datos`
+
+Debe ser:
+
+```text
+String no vacío
+```
+
+`registrado_por`
+
+Debe ser:
+
+```text
+ObjectId
+```
+
+Los documentos no permiten propiedades adicionales fuera del contrato definido:
+
+```text
+additionalProperties: false
+```
+
+---
+
+## 21.7 Catálogo de tipos de intervención
+
+El catálogo oficial de:
+
+```text
+tipo_intervencion
+```
+
+se encuentra pendiente de definición funcional.
+
+Por esta razón se mantiene actualmente como:
+
+```text
+String
+```
+
+con longitud mínima de 1.
+
+No existe todavía un:
+
+```text
+enum
+```
+
+No debe incorporarse unilateralmente desde la capa DBA.
+
+---
+
+## 21.8 Fuente de datos
+
+El catálogo oficial de:
+
+```text
+fuente_datos
+```
+
+también se encuentra pendiente.
+
+Actualmente debe ser:
+
+```text
+String no vacío
+```
+
+---
+
+## 21.9 Multiplicidad
+
+No existe una restricción de:
+
+```text
+una intervención por albergue y día
+```
+
+Pueden existir múltiples intervenciones para:
+
+```text
+mismo albergue
+misma fecha
+```
+
+También pueden existir múltiples intervenciones con:
+
+```text
+mismo albergue
+misma fecha
+mismo tipo_intervencion
+```
+
+si corresponden a acciones reales independientes.
+
+Por esta razón los índices de la colección no utilizan:
+
+```text
+unique: true
+```
+
+---
+
+## 21.10 Referencias lógicas
+
+```text
+intervenciones.albergue_id
+    → albergues._id
+
+intervenciones.registrado_por
+    → usuarios._id
+
+intervenciones.updated_by
+    → usuarios._id
+```
+
+MongoDB valida que los campos sean:
+
+```text
+ObjectId
+```
+
+pero no garantiza mediante `$jsonSchema` que el documento relacionado exista.
+
+La aplicación debe verificar la existencia efectiva antes de persistir.
+
+Los controles DBA utilizan:
+
+```text
+$lookup
+```
+
+para detectar referencias huérfanas.
+
+---
+
+## 21.11 Índices
+
+### Consulta por albergue y fecha
+
+```text
+ix_intervenciones_albergue_fecha
+```
+
+```javascript
+{
+    albergue_id: 1,
+    fecha_intervencion: -1
+}
+```
+
+Permite consultar cronológicamente las intervenciones de un albergue.
+
+No es único.
+
+### Consulta por albergue, tipo y fecha
+
+```text
+ix_intervenciones_albergue_tipo_fecha
+```
+
+```javascript
+{
+    albergue_id: 1,
+    tipo_intervencion: 1,
+    fecha_intervencion: -1
+}
+```
+
+Permite consultar la evolución histórica de un tipo de intervención dentro de un albergue.
+
+No es único.
+
+---
+
+## 21.12 Migración
+
+La colección fue incorporada mediante:
+
+```text
+007_create_intervenciones.js
+```
+
+La migración:
+
+- verifica las colecciones requeridas;
+- verifica que la migración 006 esté aplicada;
+- crea la colección cuando no existe;
+- utiliza `collMod` cuando ya existe;
+- aplica `$jsonSchema`;
+- establece `validationLevel: strict`;
+- establece `validationAction: error`;
+- crea los índices;
+- valida referencias lógicas existentes;
+- registra la migración en `schema_migrations`;
+- comprueba que la versión quede registrada una sola vez;
+- comprueba la existencia final de los índices.
+
+La migración aplicada no debe modificarse retroactivamente.
+
+---
+
+## 21.13 Inicialización reproducible
+
+El archivo:
+
+```text
+database/mongodb/init/init_semaforo_vital.js
+```
+
+contiene actualmente el contrato de:
+
+```text
+intervenciones
+```
+
+En una instalación nueva:
+
+```text
+createCollection
+```
+
+crea la colección.
+
+En una instalación existente:
+
+```text
+collMod
+```
+
+actualiza el validator al estado estructural vigente.
+
+También crea o verifica:
+
+```text
+ix_intervenciones_albergue_fecha
+ix_intervenciones_albergue_tipo_fecha
+```
+
+---
+
+## 21.14 Pruebas DBA
+
+Archivo:
+
+```text
+database/mongodb/tests/test_intervenciones.js
+```
+
+Resultado validado:
+
+```text
+Pruebas exitosas: 15
+Pruebas fallidas: 0
+```
+
+La suite prueba tanto validaciones estructurales como reglas propias del modelo.
+
+Entre ellas se verifica explícitamente que MongoDB permite:
+
+```text
+dos intervenciones
+mismo albergue
+misma fecha
+mismo tipo
+```
+
+cuando son acciones independientes.
+
+También se verifica la detección de una referencia lógica huérfana mediante:
+
+```text
+$lookup
+```
+
+Las pruebas fueron ejecutadas nuevamente después de actualizar:
+
+```text
+init_semaforo_vital.js
+```
+
+conservando el resultado:
+
+```text
+15/15
+```
+
+---
+
+# 22. Estado del contrato
+
+El modelo MongoDB implementado actualmente incluye:
+
+```text
+usuarios                  ✓
+albergues                 ✓
+registros_diarios         ✓
+condiciones_sanitarias    ✓
+casos_enfermedades        ✓
+intervenciones            ✓
+schema_migrations         ✓
+```
+
+Migraciones:
+
+```text
+001_fix_colombia_timezone           ✓ legacy
+002_create_usuarios                 ✓
+003_harden_data_integrity           ✓
+004_add_update_traceability         ✓
+005_create_condiciones_sanitarias   ✓
+006_create_casos_enfermedades       ✓
+007_create_intervenciones           ✓
+```
+
+Pruebas específicas recientes:
+
+```text
+condiciones_sanitarias     14/14
+casos_enfermedades         14/14
+intervenciones             15/15
+```
+
+El siguiente crecimiento del modelo debe continuar utilizando:
+
+```text
+migración
+→ pruebas
+→ init
+→ documentación
+→ commit
+→ Pull Request
+```
+
+sin modificar retroactivamente las migraciones ya aplicadas.
