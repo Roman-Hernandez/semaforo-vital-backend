@@ -12,9 +12,9 @@ from app.application.shelters import ShelterService
 from app.core.timezone import start_of_day_colombia
 from app.domain.errors import PersistenceError, PopulationConflict
 from app.domain.shelters import (
-    Coordinates,
     DailyCases,
     DashboardSources,
+    GeoPoint,
     IntradayOccupancy,
     Location,
     PopulationRecord,
@@ -41,7 +41,7 @@ class MemoryShelterRepository:
             registrado_por=USER.id, codigo_albergue="ALB-1", activo=True, fecha=NOW,
             ubicacion=Location(
                 departamento="Risaralda", municipio="Pereira", direccion="Calle 1",
-                coordenadas=Coordinates(type="Point", coordinates=(-75.7, 4.8)),
+                coordenadas=GeoPoint(type="Point", coordinates=(-75.7, 4.8)),
             ),
         )
         self.records = {}
@@ -210,8 +210,9 @@ def test_mongo_population_upsert_uses_independent_history():
 def test_persistence_errors_are_translated(error, expected):
     database = MagicMock()
     database.historial_poblacion.find_one_and_update.side_effect = error
+    repository = MongoShelterRepository(database)
     with pytest.raises(expected):
-        MongoShelterRepository(database).save_population(SHELTER, USER.id, NOW, 1, NOW)
+        repository.save_population(SHELTER, USER.id, NOW, 1, NOW)
 
 
 @pytest.mark.parametrize("error, code", [(PersistenceError(), 503), (PopulationConflict(), 409)])
@@ -310,8 +311,10 @@ def test_duplicate_shelter_update_is_not_a_population_conflict():
     from app.domain.shelters import ShelterUpdate
     database = MagicMock()
     database.albergues.find_one_and_update.side_effect = DuplicateKeyError("duplicate")
+    repository = MongoShelterRepository(database)
+    changes = ShelterUpdate(nombre="Nuevo")
     with pytest.raises(PersistenceError):
-        MongoShelterRepository(database).update(SHELTER, ShelterUpdate(nombre="Nuevo"), USER.id, NOW)
+        repository.update(SHELTER, changes, USER.id, NOW)
 
 
 def test_shelter_response_cannot_expose_undeclared_fields(api):
@@ -339,8 +342,9 @@ def test_invalid_population_and_shelter_data_have_domain_errors():
 def test_storage_integer_limit_is_checked_by_the_mongo_adapter():
     from app.domain.errors import InvalidPopulation
     database = MagicMock()
+    repository = MongoShelterRepository(database)
     with pytest.raises(InvalidPopulation):
-        MongoShelterRepository(database).save_population(SHELTER, USER.id, NOW, 2**31, NOW)
+        repository.save_population(SHELTER, USER.id, NOW, 2**31, NOW)
     database.historial_poblacion.find_one_and_update.assert_not_called()
 
 

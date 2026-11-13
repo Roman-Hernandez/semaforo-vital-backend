@@ -89,7 +89,7 @@ def error_response(definition: ErrorDefinition, *, errors=None, headers=None) ->
     )
 
 
-async def application_error_handler(request: Request, exc: ApplicationError):
+def application_error_handler(request: Request, exc: ApplicationError):
     definition = next(
         (ERROR_CATALOG[cls] for cls in type(exc).__mro__ if cls in ERROR_CATALOG),
         HTTP_ERRORS[500],
@@ -97,7 +97,7 @@ async def application_error_handler(request: Request, exc: ApplicationError):
     return error_response(definition)
 
 
-async def validation_error_handler(request: Request, exc: RequestValidationError):
+def validation_error_handler(request: Request, exc: RequestValidationError):
     # Do not echo input or exception context: these can contain passwords or tokens.
     issues = [ValidationIssue(
         location=list(error["loc"]), message="Valor inválido", type=error["type"],
@@ -105,14 +105,14 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     return error_response(HTTP_ERRORS[422], errors=issues)
 
 
-async def http_error_handler(request: Request, exc: HTTPException):
+def http_error_handler(request: Request, exc: HTTPException):
     definition = HTTP_ERRORS.get(exc.status_code)
     if definition is None:
         definition = ErrorDefinition(exc.status_code, "HTTP_ERROR", "No fue posible procesar la solicitud")
     return error_response(definition, headers=exc.headers)
 
 
-async def internal_error_handler(request: Request, exc: Exception):
+def internal_error_handler(request: Request, exc: Exception):
     logging.getLogger(__name__).error("Unhandled error on %s", request.url.path, exc_info=exc)
     return error_response(HTTP_ERRORS[500])
 

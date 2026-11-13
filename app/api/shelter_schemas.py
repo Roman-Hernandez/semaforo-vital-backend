@@ -6,9 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.application.shelters import AdministratorContact, AlertSummary
 from app.domain.shelters import (
-    Coordinates as DomainCoordinates,
-)
-from app.domain.shelters import (
     DailyCases,
     DiseaseRecord,
     DiseaseSummary,
@@ -17,6 +14,9 @@ from app.domain.shelters import (
     RiskAnalysis,
     SanitaryConditions,
     TrafficLight,
+)
+from app.domain.shelters import (
+    GeoPoint as DomainGeoPoint,
 )
 from app.domain.shelters import (
     Location as DomainLocation,
@@ -69,7 +69,7 @@ class ShelterUpdate(BaseModel):
             location = DomainLocation(
                 departamento=value.departamento, municipio=value.municipio,
                 direccion=value.direccion,
-                coordenadas=DomainCoordinates(
+                coordenadas=DomainGeoPoint(
                     type=value.coordenadas.type, coordinates=value.coordenadas.coordinates,
                 ),
             )

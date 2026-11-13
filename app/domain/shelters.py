@@ -10,7 +10,7 @@ from app.domain.users import User, UserRole
 
 
 @dataclass(frozen=True, kw_only=True)
-class Coordinates:
+class GeoPoint:
     type: str
     coordinates: tuple[float, float]
 
@@ -27,7 +27,7 @@ class Location:
     departamento: str
     municipio: str
     direccion: str
-    coordenadas: Coordinates
+    coordenadas: GeoPoint
 
     def __post_init__(self):
         if any(not text.strip() for text in (self.departamento, self.municipio, self.direccion)):

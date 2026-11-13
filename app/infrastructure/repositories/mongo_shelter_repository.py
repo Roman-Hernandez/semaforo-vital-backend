@@ -17,11 +17,11 @@ from app.domain.errors import (
 from app.domain.shelters import (
     AnalysisInputs,
     AnalysisPeriod,
-    Coordinates,
     DailyCases,
     DashboardSources,
     DiseaseRecord,
     DiseaseSummary,
+    GeoPoint,
     Intervention,
     IntradayOccupancy,
     Location,
@@ -76,7 +76,7 @@ def _location(document):
     return Location(
         departamento=document["departamento"], municipio=document["municipio"],
         direccion=document["direccion"],
-        coordenadas=Coordinates(type=coordinates["type"], coordinates=tuple(coordinates["coordinates"])),
+        coordenadas=GeoPoint(type=coordinates["type"], coordinates=tuple(coordinates["coordinates"])),
     )
 
 
