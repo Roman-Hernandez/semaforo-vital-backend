@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field, SecretStr
 
 from app.api.deps import get_auth_use_case
-from app.application.auth import AuthenticateUserUseCase
 from app.api.errors import ERROR_RESPONSES
+from app.application.auth import AuthenticateUserUseCase
 
 router = APIRouter(prefix="/auth", tags=["authentication"], responses=ERROR_RESPONSES)
 

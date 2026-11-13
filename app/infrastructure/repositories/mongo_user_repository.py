@@ -4,7 +4,6 @@ from pymongo.database import Database
 from pymongo.errors import PyMongoError
 
 from app.domain.errors import PersistenceError
-
 from app.domain.users import User, UserRole
 
 

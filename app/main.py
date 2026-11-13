@@ -4,8 +4,8 @@ from time import monotonic
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1.router import api_router_v1
 from app.api.errors import HTTP_ERRORS, error_response, register_error_handlers
+from app.api.v1.router import api_router_v1
 from app.core.config import settings
 from app.infrastructure.database.mongodb import mongodb_lifespan
 

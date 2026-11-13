@@ -7,16 +7,22 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.application.shelters import AdministratorContact, AlertSummary
 from app.domain.shelters import (
     Coordinates as DomainCoordinates,
+)
+from app.domain.shelters import (
     DailyCases,
     DiseaseRecord,
     DiseaseSummary,
     Intervention,
     IntradayOccupancy,
-    Location as DomainLocation,
     RiskAnalysis,
     SanitaryConditions,
-    ShelterUpdate as ShelterChanges,
     TrafficLight,
+)
+from app.domain.shelters import (
+    Location as DomainLocation,
+)
+from app.domain.shelters import (
+    ShelterUpdate as ShelterChanges,
 )
 
 NonNegativeInt = Annotated[int, Field(strict=True, ge=0, le=2147483647)]

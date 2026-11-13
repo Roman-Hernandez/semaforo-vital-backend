@@ -4,8 +4,16 @@ from datetime import datetime
 from app.domain.errors import ShelterNotFound
 from app.domain.ports.shelter_repository import ShelterRepository
 from app.domain.shelters import (
-    DashboardSources, IntradayOccupancy, Occupancy, PopulationRecord, Shelter,
-    ShelterIndicators, ShelterUpdate, TrafficLight, assigned_shelter, occupancy,
+    DashboardSources,
+    IntradayOccupancy,
+    Occupancy,
+    PopulationRecord,
+    Shelter,
+    ShelterIndicators,
+    ShelterUpdate,
+    TrafficLight,
+    assigned_shelter,
+    occupancy,
     validate_population,
 )
 from app.domain.users import User

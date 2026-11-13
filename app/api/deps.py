@@ -13,7 +13,9 @@ from app.domain.errors import InsufficientPermissions, NotAuthenticated
 from app.domain.ports.user_repository import UserRepository
 from app.domain.users import User, UserRole
 from app.infrastructure.database.mongodb import get_database_from_request
-from app.infrastructure.repositories.mongo_shelter_repository import MongoShelterRepository
+from app.infrastructure.repositories.mongo_shelter_repository import (
+    MongoShelterRepository,
+)
 from app.infrastructure.repositories.mongo_user_repository import MongoUserRepository
 from app.infrastructure.security.tokens import JwtTokens, verify_password
 

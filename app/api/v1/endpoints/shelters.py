@@ -3,14 +3,23 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_current_user, get_shelter_service
-from app.application.shelters import DashboardView, PopulationView, ShelterDetail, ShelterService
 from app.api.errors import ERROR_RESPONSES
-from app.domain.shelters import PopulationRecord, Shelter
 from app.api.shelter_schemas import (
-    DashboardResponse, PopulationRecordResponse, PopulationResponse, PopulationUpdate,
-    ShelterDetailResponse, ShelterResponse, ShelterUpdate,
+    DashboardResponse,
+    PopulationRecordResponse,
+    PopulationResponse,
+    PopulationUpdate,
+    ShelterDetailResponse,
+    ShelterResponse,
+    ShelterUpdate,
+)
+from app.application.shelters import (
+    PopulationView,
+    ShelterDetail,
+    ShelterService,
 )
 from app.core.timezone import now_colombia, start_of_day_colombia
+from app.domain.shelters import PopulationRecord, Shelter
 from app.domain.users import User
 
 router = APIRouter(

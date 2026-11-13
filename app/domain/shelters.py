@@ -2,7 +2,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from app.domain.errors import (
-    InvalidPopulation, InvalidShelterData, ShelterAccessDenied,
+    InvalidPopulation,
+    InvalidShelterData,
+    ShelterAccessDenied,
 )
 from app.domain.users import User, UserRole
 

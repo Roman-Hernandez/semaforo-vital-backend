@@ -9,19 +9,19 @@ from fastapi.testclient import TestClient
 from pwdlib import PasswordHash
 
 from app.api.deps import (
+    decode_access_token,
     get_auth_use_case,
     get_current_user,
     get_user_repository,
+    issue_access_token,
     require_role,
 )
 from app.application.auth import AuthenticateUserUseCase
-from app.api.deps import decode_access_token, issue_access_token
-from app.domain.errors import InvalidCredentials, InvalidTokenError, TokenExpiredError
-from app.infrastructure.security.tokens import verify_password
-
 from app.core.config import settings
+from app.domain.errors import InvalidCredentials, InvalidTokenError, TokenExpiredError
 from app.domain.users import User, UserRole
 from app.infrastructure.repositories.mongo_user_repository import MongoUserRepository
+from app.infrastructure.security.tokens import verify_password
 from app.main import _request_hits, app
 from database.mongodb.seeds.seed_admin import seed_superadmin
 
@@ -476,7 +476,9 @@ def test_invalid_password_hash_is_controlled():
 
 def test_database_errors_in_authentication_are_translated():
     from unittest.mock import MagicMock
+
     from pymongo.errors import OperationFailure
+
     from app.domain.errors import PersistenceError
 
     collection = MagicMock()

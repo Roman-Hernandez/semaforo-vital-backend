@@ -8,13 +8,35 @@ from pymongo import ReturnDocument
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
-from app.domain.errors import InvalidPopulation, InvalidShelterData, PersistenceError, PopulationConflict
+from app.domain.errors import (
+    InvalidPopulation,
+    InvalidShelterData,
+    PersistenceError,
+    PopulationConflict,
+)
 from app.domain.shelters import (
-    AnalysisInputs, AnalysisPeriod, Coordinates, DailyCases, DashboardSources, DiseaseRecord,
-    DiseaseSummary, Intervention, IntradayOccupancy, Location, ModelVersion,
-    MissingData, PopulationRecord, Preprocessing, RiskAnalysis, RiskResult,
-    SanitaryConditions, SanitaryResource,
-    Shelter, ShelterIndicators, ShelterUpdate, TrafficLight,
+    AnalysisInputs,
+    AnalysisPeriod,
+    Coordinates,
+    DailyCases,
+    DashboardSources,
+    DiseaseRecord,
+    DiseaseSummary,
+    Intervention,
+    IntradayOccupancy,
+    Location,
+    MissingData,
+    ModelVersion,
+    PopulationRecord,
+    Preprocessing,
+    RiskAnalysis,
+    RiskResult,
+    SanitaryConditions,
+    SanitaryResource,
+    Shelter,
+    ShelterIndicators,
+    ShelterUpdate,
+    TrafficLight,
 )
 
 

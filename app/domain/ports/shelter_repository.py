@@ -2,7 +2,11 @@ from datetime import datetime
 from typing import Protocol
 
 from app.domain.shelters import (
-    DashboardSources, PopulationRecord, Shelter, ShelterIndicators, ShelterUpdate,
+    DashboardSources,
+    PopulationRecord,
+    Shelter,
+    ShelterIndicators,
+    ShelterUpdate,
 )
 
 

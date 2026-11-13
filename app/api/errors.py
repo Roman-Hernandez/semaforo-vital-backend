@@ -9,10 +9,19 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
 from app.domain.errors import (
-    ApplicationError, InactiveUser, InsufficientPermissions, InvalidCredentials,
-    InvalidPopulation, InvalidShelterData, InvalidTokenError, NotAuthenticated,
-    PersistenceError, PopulationConflict, ShelterAccessDenied,
-    ShelterNotFound, TokenExpiredError,
+    ApplicationError,
+    InactiveUser,
+    InsufficientPermissions,
+    InvalidCredentials,
+    InvalidPopulation,
+    InvalidShelterData,
+    InvalidTokenError,
+    NotAuthenticated,
+    PersistenceError,
+    PopulationConflict,
+    ShelterAccessDenied,
+    ShelterNotFound,
+    TokenExpiredError,
 )
 
 

@@ -10,14 +10,24 @@ from pymongo.errors import DuplicateKeyError, OperationFailure
 from app.api.deps import get_current_user, get_shelter_service, get_user_repository
 from app.application.shelters import ShelterService
 from app.core.timezone import start_of_day_colombia
-from app.domain.errors import PopulationConflict, PersistenceError
+from app.domain.errors import PersistenceError, PopulationConflict
 from app.domain.shelters import (
-    Coordinates, DailyCases, DashboardSources, IntradayOccupancy, Location,
-    PopulationRecord, Shelter, ShelterIndicators, TrafficLight, occupancy,
+    Coordinates,
+    DailyCases,
+    DashboardSources,
+    IntradayOccupancy,
+    Location,
+    PopulationRecord,
+    Shelter,
+    ShelterIndicators,
+    TrafficLight,
+    occupancy,
 )
 from app.domain.users import User, UserRole
-from app.infrastructure.repositories.mongo_shelter_repository import MongoShelterRepository
-from app.main import app, _request_hits
+from app.infrastructure.repositories.mongo_shelter_repository import (
+    MongoShelterRepository,
+)
+from app.main import _request_hits, app
 
 SHELTER = "507f1f77bcf86cd799439012"
 USER = User("507f1f77bcf86cd799439011", "admin@example.com", "secret", UserRole.SHELTER_ADMIN, True, albergue_id=SHELTER)
@@ -146,7 +156,7 @@ def test_shelter_update_allowlist(api, payload):
 
 
 def test_update_traces_author_and_missing_shelter(api):
-    client, repository = api
+    client, _ = api
     response = client.patch("/api/v1/mi-albergue", json={"nombre": "Nuevo", "capacidad_instalada": 0})
     assert response.status_code == 200
     assert response.json()["updated_by"] == USER.id
