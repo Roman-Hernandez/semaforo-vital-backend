@@ -1,13 +1,14 @@
 from dataclasses import asdict
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field, SecretStr
 
 from app.api.deps import get_auth_use_case
-from app.application.auth import AuthenticateUserUseCase, InvalidCredentials
+from app.application.auth import AuthenticateUserUseCase
+from app.api.errors import ERROR_RESPONSES
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["authentication"], responses=ERROR_RESPONSES)
 
 
 class LoginRequest(BaseModel):
@@ -25,15 +26,5 @@ def login(
     payload: LoginRequest,
     use_case: Annotated[AuthenticateUserUseCase, Depends(get_auth_use_case)],
 ):
-    try:
-        token = use_case.execute(
-            payload.email,
-            payload.password.get_secret_value(),
-        )
-    except InvalidCredentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales inválidas",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
+    token = use_case.execute(payload.email, payload.password.get_secret_value())
     return asdict(token)

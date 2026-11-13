@@ -1,6 +1,9 @@
 from bson import ObjectId
 from bson.errors import InvalidId
 from pymongo.database import Database
+from pymongo.errors import PyMongoError
+
+from app.domain.errors import PersistenceError
 
 from app.domain.users import User, UserRole
 
@@ -24,7 +27,10 @@ class MongoUserRepository:
         )
 
     def find_by_email(self, email: str) -> User | None:
-        document = self.collection.find_one({"email": email.strip().lower()})
+        try:
+            document = self.collection.find_one({"email": email.strip().lower()})
+        except PyMongoError as exc:
+            raise PersistenceError() from exc
         return self._to_user(document) if document else None
 
     def find_by_id(self, user_id: str) -> User | None:
@@ -32,5 +38,8 @@ class MongoUserRepository:
             oid = ObjectId(user_id)
         except (InvalidId, TypeError):
             return None
-        document = self.collection.find_one({"_id": oid})
+        try:
+            document = self.collection.find_one({"_id": oid})
+        except PyMongoError as exc:
+            raise PersistenceError() from exc
         return self._to_user(document) if document else None

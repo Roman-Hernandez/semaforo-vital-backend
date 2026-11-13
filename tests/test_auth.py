@@ -14,14 +14,11 @@ from app.api.deps import (
     get_user_repository,
     require_role,
 )
-from app.application.auth import (
-    AuthenticateUserUseCase,
-    InvalidCredentials,
-    InvalidTokenError,
-    TokenExpiredError,
-    authenticate,
-    decode_access_token,
-)
+from app.application.auth import AuthenticateUserUseCase
+from app.api.deps import decode_access_token, issue_access_token
+from app.domain.errors import InvalidCredentials, InvalidTokenError, TokenExpiredError
+from app.infrastructure.security.tokens import verify_password
+
 from app.core.config import settings
 from app.domain.users import User, UserRole
 from app.infrastructure.repositories.mongo_user_repository import MongoUserRepository
@@ -46,6 +43,14 @@ class StubUserRepository:
         return None
 
 
+def make_auth(repository):
+    return AuthenticateUserUseCase(repository, verify_password, issue_access_token)
+
+
+def authenticate(repository, email, password):
+    return make_auth(repository).execute(email, password)
+
+
 @pytest.fixture
 def user() -> User:
     return User(
@@ -62,7 +67,7 @@ def user() -> User:
 
 def test_valid_credentials_return_expiring_jwt(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
-    use_case = AuthenticateUserUseCase(StubUserRepository(user))
+    use_case = make_auth(StubUserRepository(user))
     token = use_case.execute(" Admin@Example.com ", "correct-horse-battery")
     claims = jwt.decode(token.access_token, TEST_SECRET, algorithms=["HS256"])
     assert claims["sub"] == user.id
@@ -79,27 +84,27 @@ def test_authenticate_helper_function(monkeypatch, user):
 
 
 def test_incorrect_password(user):
-    use_case = AuthenticateUserUseCase(StubUserRepository(user))
+    use_case = make_auth(StubUserRepository(user))
     with pytest.raises(InvalidCredentials):
         use_case.execute("admin@example.com", "wrong")
 
 
 def test_inactive_account(user):
     inactive = User(**{**vars(user), "active": False})
-    use_case = AuthenticateUserUseCase(StubUserRepository(inactive))
+    use_case = make_auth(StubUserRepository(inactive))
     with pytest.raises(InvalidCredentials):
         use_case.execute("admin@example.com", "correct-horse-battery")
 
 
 def test_unknown_account():
-    use_case = AuthenticateUserUseCase(StubUserRepository(None))
+    use_case = make_auth(StubUserRepository(None))
     with pytest.raises(InvalidCredentials):
         use_case.execute("admin@example.com", "invalid")
 
 
 def test_short_jwt_secret_rejected(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", "short-secret")
-    use_case = AuthenticateUserUseCase(StubUserRepository(user))
+    use_case = make_auth(StubUserRepository(user))
     with pytest.raises(RuntimeError, match="at least 32 characters"):
         use_case.execute("admin@example.com", "correct-horse-battery")
 
@@ -113,8 +118,7 @@ def test_decode_valid_token(monkeypatch, user):
         StubUserRepository(user), "admin@example.com", "correct-horse-battery"
     )
     payload = decode_access_token(token.access_token)
-    assert payload["sub"] == user.id
-    assert payload["role"] == "administrador_albergue"
+    assert payload == user.id
 
 
 def test_decode_expired_token(monkeypatch):
@@ -214,7 +218,7 @@ def test_mongo_user_repository_not_found():
 
 def test_login_api_success_200(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
-    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(
+    app.dependency_overrides[get_auth_use_case] = lambda: make_auth(
         StubUserRepository(user)
     )
     try:
@@ -242,7 +246,7 @@ def test_login_api_success_200(monkeypatch, user):
 )
 def test_login_api_invalid_credentials_returns_401(monkeypatch, user, email, password):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
-    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(
+    app.dependency_overrides[get_auth_use_case] = lambda: make_auth(
         StubUserRepository(user)
     )
     try:
@@ -252,7 +256,7 @@ def test_login_api_invalid_credentials_returns_401(monkeypatch, user, email, pas
             "password": password,
         })
         assert response.status_code == 401
-        assert response.json() == {"detail": "Credenciales inválidas"}
+        assert response.json() == {"code": "INVALID_CREDENTIALS", "detail": "Credenciales inválidas"}
         assert response.headers.get("WWW-Authenticate") == "Bearer"
     finally:
         app.dependency_overrides.clear()
@@ -261,7 +265,7 @@ def test_login_api_invalid_credentials_returns_401(monkeypatch, user, email, pas
 def test_login_api_inactive_account_returns_401(monkeypatch, user):
     monkeypatch.setattr(settings, "jwt_secret_key", TEST_SECRET)
     inactive_user = User(**{**vars(user), "active": False})
-    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(
+    app.dependency_overrides[get_auth_use_case] = lambda: make_auth(
         StubUserRepository(inactive_user)
     )
     try:
@@ -271,13 +275,13 @@ def test_login_api_inactive_account_returns_401(monkeypatch, user):
             "password": "correct-horse-battery",
         })
         assert response.status_code == 401
-        assert response.json() == {"detail": "Credenciales inválidas"}
+        assert response.json() == {"code": "INVALID_CREDENTIALS", "detail": "Credenciales inválidas"}
     finally:
         app.dependency_overrides.clear()
 
 
 def test_login_api_validation_error_422():
-    app.dependency_overrides[get_auth_use_case] = lambda: AuthenticateUserUseCase(
+    app.dependency_overrides[get_auth_use_case] = lambda: make_auth(
         StubUserRepository()
     )
     try:
@@ -316,7 +320,7 @@ def test_rate_limit_middleware_blocks_excess_requests(monkeypatch):
         assert client.get("/api/v1/health").status_code == 200
         res = client.get("/api/v1/health")
         assert res.status_code == 429
-        assert res.json() == {"detail": "Demasiadas solicitudes"}
+        assert res.json() == {"code": "RATE_LIMIT_EXCEEDED", "detail": "Demasiadas solicitudes"}
     finally:
         _request_hits.clear()
 
@@ -360,7 +364,7 @@ def test_private_route_without_token_returns_401():
         client = TestClient(app)
         response = client.get("/demo-auth/private")
         assert response.status_code == 401
-        assert response.json() == {"detail": "No autenticado"}
+        assert response.json() == {"code": "NOT_AUTHENTICATED", "detail": "No autenticado"}
     finally:
         app.dependency_overrides.clear()
 
@@ -399,7 +403,7 @@ def test_private_route_with_inactive_user_returns_401(monkeypatch, user):
             headers={"Authorization": f"Bearer {token.access_token}"},
         )
         assert response.status_code == 401
-        assert response.json() == {"detail": "Usuario inactivo o no encontrado"}
+        assert response.json() == {"code": "USER_UNAVAILABLE", "detail": "Usuario inactivo o no encontrado"}
     finally:
         app.dependency_overrides.clear()
 
@@ -418,7 +422,7 @@ def test_role_restricted_route(monkeypatch, user):
             headers={"Authorization": f"Bearer {token.access_token}"},
         )
         assert response.status_code == 403
-        assert response.json() == {"detail": "Permisos insuficientes"}
+        assert response.json() == {"code": "INSUFFICIENT_PERMISSIONS", "detail": "Permisos insuficientes"}
     finally:
         app.dependency_overrides.clear()
 
@@ -433,3 +437,70 @@ def test_seed_superadmin_invalid_inputs():
     with pytest.raises(ValueError, match="al menos 8 caracteres"):
         seed_superadmin(email="admin@example.com", password="123")
 
+
+
+def test_authentication_use_case_runs_without_crypto_or_configuration(user):
+    from app.application.auth import AuthToken
+    calls = []
+
+    def verify(password, hashed):
+        calls.append((password, hashed))
+        return True
+
+    expected = AuthToken("opaque-token")
+    service = AuthenticateUserUseCase(StubUserRepository(user), verify, lambda found: expected)
+    assert service.execute(" ADMIN@example.com ", "password") == expected
+    assert calls == [("password", user.password_hash)]
+
+
+def test_unknown_user_still_verifies_a_dummy_password():
+    calls = []
+    service = AuthenticateUserUseCase(
+        StubUserRepository(), lambda password, hashed: calls.append(hashed),
+        lambda user: pytest.fail("No token should be issued"),
+    )
+    with pytest.raises(InvalidCredentials):
+        service.execute("unknown@example.com", "password")
+    assert calls == [None]
+
+
+def test_user_resolution_accepts_an_injected_decoder(user):
+    from app.application.auth import ResolveUserUseCase
+    service = ResolveUserUseCase(StubUserRepository(user), lambda token: user.id)
+    assert service.execute("opaque-token") == user
+
+
+def test_invalid_password_hash_is_controlled():
+    assert verify_password("password", "invalid-hash") is False
+
+
+def test_database_errors_in_authentication_are_translated():
+    from unittest.mock import MagicMock
+    from pymongo.errors import OperationFailure
+    from app.domain.errors import PersistenceError
+
+    collection = MagicMock()
+    collection.find_one.side_effect = OperationFailure("private")
+    repository = MongoUserRepository({"usuarios": collection})
+    with pytest.raises(PersistenceError):
+        repository.find_by_email("admin@example.com")
+    with pytest.raises(PersistenceError):
+        repository.find_by_id("507f1f77bcf86cd799439011")
+
+
+def test_validation_error_never_echoes_a_password():
+    app.dependency_overrides[get_auth_use_case] = lambda: make_auth(StubUserRepository())
+    _request_hits.clear()
+    try:
+        secret = "do-not-expose-" * 20
+        response = TestClient(app).post("/api/v1/auth/login", json={
+            "email": "admin@example.com", "password": secret,
+        })
+        assert response.status_code == 422
+        assert response.json()["code"] == "VALIDATION_ERROR"
+        assert response.json()["errors"][0]["location"] == ["body", "password"]
+        assert secret not in response.text
+        assert "input" not in response.text
+    finally:
+        app.dependency_overrides.clear()
+        _request_hits.clear()
