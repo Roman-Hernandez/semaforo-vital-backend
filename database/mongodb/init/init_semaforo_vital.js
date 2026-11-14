@@ -37,7 +37,6 @@ const validatorAlbergues = {
             "capacidad_instalada",
             "activo",
             "registrado_por",
-            "fecha",
             "created_at"
         ],
 
@@ -67,7 +66,6 @@ const validatorAlbergues = {
                 required: [
                     "departamento",
                     "municipio",
-                    "direccion",
                     "coordenadas"
                 ],
 
@@ -85,8 +83,7 @@ const validatorAlbergues = {
                     },
 
                     direccion: {
-                        bsonType: "string",
-                        minLength: 1
+                        bsonType: ["string", "null"]
                     },
 
                     coordenadas: {
@@ -164,6 +161,16 @@ const validatorAlbergues = {
             created_at: {
                 bsonType: "date",
                 description: "Fecha y hora técnica de creación"
+            },
+
+            updated_at: {
+                bsonType: "date",
+                description: "Fecha y hora de la última modificación"
+            },
+
+            desactivado_en: {
+                bsonType: "date",
+                description: "Fecha de desactivación lógica"
             }
         }
     }
