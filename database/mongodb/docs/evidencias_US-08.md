@@ -486,3 +486,105 @@ Los cambios se desarrollan fuera de `main` y serán integrados mediante Pull Req
 ## Conclusión
 
 La US-08 quedó implementada técnicamente en MongoDB Atlas con colecciones, validadores nativos, índice único, datos semilla reproducibles y pruebas automatizadas. El entorno `semaforo_vital` está disponible para que el backend inicie integración y pruebas sin depender de creación manual de estructuras en Atlas.
+
+## Evidencias de ajustes QA
+
+### Migraciones aplicadas
+
+Se verificaron las siguientes migraciones:
+
+- `001_fix_colombia_timezone.js`
+- `002_create_usuarios.js`
+- `003_harden_data_integrity.js`
+- `004_add_update_traceability.js`
+
+La migración `001` fue ejecutada antes de la creación de `schema_migrations`.
+
+Las migraciones posteriores se registran mediante la colección `schema_migrations`.
+
+### Colección usuarios
+
+Se validó la existencia de la colección `usuarios` con:
+
+- email único;
+- hash Argon2id;
+- roles controlados;
+- estado lógico;
+- asociación opcional/obligatoria a albergue según el rol;
+- fechas de creación y actualización.
+
+### Integridad referencial
+
+Inicialmente se detectó que los documentos semilla utilizaban:
+
+`ObjectId("cccccccccccccccccccccccc")`
+
+como `registrado_por`, sin que dicho usuario existiera.
+
+El seed fue corregido para utilizar un `super_administrador` activo existente.
+
+Después de la corrección se verificó:
+
+- `albergues.registrado_por → usuarios._id`: válido;
+- `registros_diarios.registrado_por → usuarios._id`: válido;
+- `registros_diarios.albergue_id → albergues._id`: válido.
+
+### Índices
+
+Se verificaron:
+
+- `ux_usuarios_email`
+- `ix_usuarios_albergue_id`
+- `ux_albergues_codigo_albergue`
+- `ux_registros_diarios_albergue_fecha`
+- `ux_schema_migrations_version`
+
+### Trazabilidad
+
+Se incorporaron:
+
+- `updated_at`
+- `updated_by`
+
+como campos opcionales para `albergues` y `registros_diarios`.
+
+Los valores existentes de `created_at` fueron preservados sin modificación.
+
+### Registros diarios
+
+Se documentó que:
+
+- existe un único consolidado por albergue y día;
+- `casos_eda` representa casos nuevos EDA del día;
+- `casos_ira` representa casos nuevos IRA del día;
+- los valores acumulados deben calcularse mediante consulta.
+
+### Pruebas QA
+
+Se ejecutó:
+
+`database/mongodb/tests/test_integridad_qa.js`
+
+Resultado:
+
+- 12 pruebas exitosas;
+- 0 pruebas fallidas;
+- limpieza de documentos temporales correcta.
+
+Las pruebas demostraron que MongoDB valida estructura, tipos e índices, pero no aplica claves foráneas.
+
+Las referencias inexistentes fueron detectadas mediante controles DBA con `$lookup`.
+
+### Reproducibilidad
+
+Se ejecutó `init_semaforo_vital.js` repetidamente sin errores.
+
+Se ejecutó `seed_semaforo_vital.js` repetidamente sin generar duplicados.
+
+Conteos esperados posteriores:
+
+- usuarios: 1
+- albergues: 2
+- registros_diarios: 2
+
+La inicialización y carga semilla quedaron reproducibles.
