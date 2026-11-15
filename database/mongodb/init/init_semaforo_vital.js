@@ -17,6 +17,7 @@
 //   - predicciones_sir
 //   - alertas
 //   - estados_semaforo
+//   - escenarios
 //   - schema_migrations
 //
 // Responsabilidad:
@@ -48,6 +49,10 @@
 // estados_semaforo fue incorporada mediante:
 //
 //   013_create_estados_semaforo
+//
+// escenarios fue incorporada mediante:
+//
+//   014_create_escenarios
 //
 // El backfill desde registros_diarios hacia historial_poblacion
 // pertenece exclusivamente a la migración 010.
@@ -2642,6 +2647,400 @@ const validatorEstadosSemaforo = {
     }
 };
 
+// ============================================================
+// 10C. VALIDADOR - ESCENARIOS
+// ============================================================
+//
+// Almacena hipótesis sanitarias e intervenciones simuladas.
+//
+// intervenciones
+//     → acciones reales.
+//
+// escenarios.intervenciones_simuladas
+//     → acciones hipotéticas.
+//
+// analisis_ia.escenario_id
+// predicciones_sir.escenario_id
+//     → referencias opcionales hacia escenarios._id.
+//
+// La colección se considera histórica / append-only.
+// ============================================================
+
+const validatorEscenarios = {
+
+    $jsonSchema: {
+
+        bsonType:
+            "object",
+
+        title:
+            "Esquema de validación de escenarios",
+
+        additionalProperties:
+            false,
+
+        required: [
+
+            "albergue_id",
+            "nombre",
+            "datos_base",
+            "condiciones_simuladas",
+            "intervenciones_simuladas",
+            "registrado_por",
+            "created_at"
+        ],
+
+        properties: {
+
+            _id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+
+            albergue_id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+
+            nombre: {
+
+                bsonType:
+                    "string",
+
+                minLength:
+                    1
+            },
+
+
+            descripcion: {
+
+                bsonType:
+                    "string"
+            },
+
+
+            datos_base: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+
+                    "registros_diarios_ids",
+                    "historial_poblacion_ids",
+                    "condiciones_sanitarias_ids",
+                    "casos_enfermedades_ids",
+                    "metricas_albergue_ids",
+                    "estados_semaforo_ids"
+                ],
+
+                properties: {
+
+                    registros_diarios_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+
+                    historial_poblacion_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+
+                    condiciones_sanitarias_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+
+                    casos_enfermedades_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+
+                    metricas_albergue_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+
+                    estados_semaforo_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    }
+                }
+            },
+
+
+            condiciones_simuladas: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+
+                    "agua_potable_disponible",
+                    "banos_disponibles",
+                    "estado_higiene",
+                    "estado_saneamiento",
+                    "otros_recursos_sanitarios"
+                ],
+
+                properties: {
+
+                    agua_potable_disponible: {
+
+                        bsonType:
+                            "bool"
+                    },
+
+
+                    banos_disponibles: {
+
+                        bsonType:
+                            "int",
+
+                        minimum:
+                            0
+                    },
+
+
+                    letrinas: {
+
+                        bsonType:
+                            "int",
+
+                        minimum:
+                            0
+                    },
+
+
+                    litros_agua: {
+
+                        bsonType: [
+
+                            "double",
+                            "int",
+                            "long",
+                            "decimal"
+                        ],
+
+                        minimum:
+                            0
+                    },
+
+
+                    estado_higiene: {
+
+                        bsonType:
+                            "string",
+
+                        minLength:
+                            1
+                    },
+
+
+                    estado_saneamiento: {
+
+                        bsonType:
+                            "string",
+
+                        minLength:
+                            1
+                    },
+
+
+                    otros_recursos_sanitarios: {
+
+                        bsonType:
+                            "array",
+
+                        items: {
+
+                            bsonType:
+                                "object",
+
+                            additionalProperties:
+                                false,
+
+                            required: [
+
+                                "nombre",
+                                "cantidad"
+                            ],
+
+                            properties: {
+
+                                nombre: {
+
+                                    bsonType:
+                                        "string",
+
+                                    minLength:
+                                        1
+                                },
+
+
+                                cantidad: {
+
+                                    bsonType:
+                                        "int",
+
+                                    minimum:
+                                        0
+                                },
+
+
+                                observacion: {
+
+                                    bsonType:
+                                        "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
+
+            intervenciones_simuladas: {
+
+                bsonType:
+                    "array",
+
+                items: {
+
+                    bsonType:
+                        "object",
+
+                    additionalProperties:
+                        false,
+
+                    required: [
+
+                        "tipo_intervencion",
+                        "descripcion"
+                    ],
+
+                    properties: {
+
+                        tipo_intervencion: {
+
+                            bsonType:
+                                "string",
+
+                            minLength:
+                                1
+                        },
+
+
+                        descripcion: {
+
+                            bsonType:
+                                "string",
+
+                            minLength:
+                                1
+                        },
+
+
+                        observaciones: {
+
+                            bsonType:
+                                "string"
+                        }
+                    }
+                }
+            },
+
+
+            registrado_por: {
+
+                bsonType:
+                    "objectId"
+            },
+
+
+            created_at: {
+
+                bsonType:
+                    "date"
+            }
+        }
+    }
+};
 
 // ============================================================
 // 11. FUNCIÓN IDEMPOTENTE
@@ -2792,6 +3191,11 @@ crearOActualizarColeccion(
 crearOActualizarColeccion(
     "estados_semaforo",
     validatorEstadosSemaforo
+);
+
+crearOActualizarColeccion(
+    "escenarios",
+    validatorEscenarios
 );
 
 
@@ -3152,6 +3556,25 @@ print(
     "ix_analisis_ia_modelo_version_fecha"
 );
 
+db.analisis_ia.createIndex(
+    {
+        escenario_id:
+            1,
+
+        fecha_ejecucion:
+            -1
+    },
+    {
+        name:
+            "ix_analisis_ia_escenario_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_analisis_ia_escenario_fecha"
+);
 
 // ------------------------------------------------------------
 // predicciones_sir
@@ -3225,6 +3648,25 @@ print(
     "ix_predicciones_sir_modelo_version_fecha"
 );
 
+db.predicciones_sir.createIndex(
+    {
+        escenario_id:
+            1,
+
+        fecha_ejecucion:
+            -1
+    },
+    {
+        name:
+            "ix_predicciones_sir_escenario_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_predicciones_sir_escenario_fecha"
+);
 
 // ------------------------------------------------------------
 // alertas
@@ -3370,6 +3812,33 @@ print(
     "ix_estados_semaforo_nivel_fecha"
 );
 
+// ------------------------------------------------------------
+// escenarios
+// ------------------------------------------------------------
+//
+// Histórico de hipótesis sanitarias.
+// El índice NO debe ser UNIQUE.
+// ------------------------------------------------------------
+
+db.escenarios.createIndex(
+    {
+        albergue_id:
+            1,
+
+        created_at:
+            -1
+    },
+    {
+        name:
+            "ix_escenarios_albergue_created_at"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_escenarios_albergue_created_at"
+);
 
 // ------------------------------------------------------------
 // schema_migrations
@@ -3485,6 +3954,19 @@ print(
     "✓ estados_semaforo histórico disponible"
 );
 
+print(
+    "✓ escenarios hipotéticos disponibles"
+);
+
+
+print(
+    "✓ Intervenciones simuladas separadas de intervenciones reales"
+);
+
+
+print(
+    "✓ Integración de escenarios con analisis_ia y predicciones_sir disponible"
+);
 
 print(
     "✓ Snapshot actual del Semáforo Vital disponible en metricas_albergue.estado_actual"
