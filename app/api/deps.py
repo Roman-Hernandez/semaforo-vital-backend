@@ -15,12 +15,16 @@ from app.application.auth import (
 from app.application.shelters import ShelterService
 from app.core.config import settings
 from app.domain.errors import InsufficientPermissions, NotAuthenticated
+from app.domain.ports.albergue_repository import AlbergueRepository
 from app.domain.ports.user_repository import UserRepository
 from app.domain.users import User, UserRole
 from app.infrastructure.cache.redis import get_redis_from_request
 from app.infrastructure.database.mongodb import get_database_from_request
 from app.infrastructure.repositories.cached_shelter_repository import (
     CachedShelterRepository,
+)
+from app.infrastructure.repositories.mongo_albergue_repository import (
+    MongoAlbergueRepository,
 )
 from app.infrastructure.repositories.mongo_shelter_repository import (
     MongoShelterRepository,
@@ -50,6 +54,10 @@ def get_redis(
         request
     )
 
+def get_albergue_repository(
+    database: Annotated[Database, Depends(get_database)],
+) -> AlbergueRepository:
+    return MongoAlbergueRepository(database)
 
 def get_user_repository(
     database: Annotated[

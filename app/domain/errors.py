@@ -51,3 +51,11 @@ class InvalidShelterData(ApplicationError):
 
 class InvalidPopulation(ApplicationError):
     pass
+
+
+class DuplicateShelterCode(ApplicationError):
+    pass
+
+
+class ShelterInactive(ApplicationError):
+    pass

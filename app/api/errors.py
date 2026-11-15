@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException
 
 from app.domain.errors import (
     ApplicationError,
+    DuplicateShelterCode,
     InactiveUser,
     InsufficientPermissions,
     InvalidCredentials,
@@ -20,6 +21,7 @@ from app.domain.errors import (
     PersistenceError,
     PopulationConflict,
     ShelterAccessDenied,
+    ShelterInactive,
     ShelterNotFound,
     TokenExpiredError,
 )
@@ -53,6 +55,8 @@ ERROR_CATALOG = {
     InsufficientPermissions: ErrorDefinition(403, "INSUFFICIENT_PERMISSIONS", "Permisos insuficientes"),
     ShelterAccessDenied: ErrorDefinition(403, "SHELTER_ACCESS_DENIED", "Se requiere un administrador con albergue asignado"),
     ShelterNotFound: ErrorDefinition(404, "SHELTER_NOT_FOUND", "Albergue no encontrado"),
+    DuplicateShelterCode: ErrorDefinition(409, "SHELTER_CODE_DUPLICATE", "Ya existe un albergue con ese código"),
+    ShelterInactive: ErrorDefinition(409, "SHELTER_INACTIVE", "El albergue está desactivado y no puede modificarse"),
     PopulationConflict: ErrorDefinition(409, "POPULATION_CONFLICT", "Conflicto al registrar población; vuelva a intentar"),
     InvalidShelterData: ErrorDefinition(422, "INVALID_SHELTER_DATA", "Datos del albergue inválidos"),
     InvalidPopulation: ErrorDefinition(422, "INVALID_POPULATION", "La población no es válida para esta operación"),
