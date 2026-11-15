@@ -36,6 +36,7 @@ casos_enfermedades
 intervenciones
 metricas_albergue
 analisis_ia
+predicciones_sir
 schema_migrations
 ```
 
@@ -61,7 +62,8 @@ database/
     │   ├── 007_create_intervenciones.js
     │   ├── 008_create_metricas_albergue.js
     │   ├── 009_create_analisis_ia.js
-    │   └── 010_create_historial_poblacion.js
+    │   ├── 010_create_historial_poblacion.js
+    │   └── 011_create_predicciones_sir.js
     │
     ├── seeds/
     │   ├── seed_admin.py
@@ -75,7 +77,8 @@ database/
     │   ├── test_intervenciones.js
     │   ├── test_metricas_albergue.js
     │   ├── test_analisis_ia.js
-    │   └── test_historial_poblacion.js
+    │   ├── test_historial_poblacion.js
+    │   └── test_predicciones_sir.js
     │
     ├── docs/
     │   ├── evidencias_US-08.md
@@ -111,9 +114,41 @@ La inicialización no reemplaza el mecanismo de migraciones.
 
 Las migraciones conservan la evolución histórica de ambientes existentes.
 
-`historial_poblacion` forma parte del estado estructural reproducible desde la incorporación de la migración 010.
+Actualmente el `init` reproduce estructuralmente:
 
-El `init` reproduce su colección, validador e índice, pero **no ejecuta el backfill histórico desde `registros_diarios`**. Esa transformación pertenece exclusivamente a la migración 010.
+```text
+usuarios
+albergues
+registros_diarios
+historial_poblacion
+condiciones_sanitarias
+casos_enfermedades
+intervenciones
+metricas_albergue
+analisis_ia
+predicciones_sir
+schema_migrations
+```
+
+El `init` no ejecuta transformaciones históricas de datos.
+
+En particular, el backfill desde:
+
+```text
+registros_diarios.poblacion
+```
+
+hacia:
+
+```text
+historial_poblacion
+```
+
+pertenece exclusivamente a:
+
+```text
+010_create_historial_poblacion.js
+```
 
 ---
 
@@ -169,6 +204,7 @@ es legacy porque fue aplicada antes de existir `schema_migrations`.
 008_create_metricas_albergue.js
 009_create_analisis_ia.js
 010_create_historial_poblacion.js
+011_create_predicciones_sir.js
 ```
 
 Evolución conceptual:
@@ -204,17 +240,18 @@ Análisis IA histórico
     ↓
 010
 Historial poblacional independiente
+    ↓
+011
+Predicciones epidemiológicas SIR
 ```
 
-La próxima migración DBA deberá utilizar el siguiente número disponible.
-
-Por tanto, la implementación futura de `predicciones_sir` deberá comenzar en:
+Después de la migración 011, el siguiente número disponible es:
 
 ```text
-011_create_predicciones_sir.js
+012
 ```
 
-si no aparece una nueva migración integrada antes de su desarrollo.
+si no se integra previamente otra migración autorizada.
 
 ---
 
@@ -438,17 +475,17 @@ poblacion
 
 se conserva dentro de esta colección por compatibilidad con el consolidado histórico existente.
 
-A partir de la migración 010, los nuevos flujos de registro, corrección y consulta de población deben utilizar:
+A partir de la migración 010, los nuevos flujos poblacionales deben utilizar:
 
 ```text
 historial_poblacion
 ```
 
-como fuente persistente principal de población diaria.
+como fuente persistente principal.
 
 ---
 
-## 10.1 Colección `historial_poblacion`
+# 10.1 Colección `historial_poblacion`
 
 Incorporada mediante:
 
@@ -480,7 +517,7 @@ Estructura:
 }
 ```
 
-Los campos obligatorios son:
+Campos obligatorios:
 
 ```text
 albergue_id
@@ -490,16 +527,14 @@ registrado_por
 created_at
 ```
 
-Los campos:
+Campos opcionales:
 
 ```text
 updated_at
 updated_by
 ```
 
-son opcionales y se utilizan cuando el registro poblacional del mismo día es corregido.
-
-La regla estructural es:
+Regla:
 
 ```text
 1 albergue + 1 fecha
@@ -530,96 +565,28 @@ Definición:
 Int32
 ```
 
-y cumplir:
+con:
 
 ```text
 poblacion >= 0
 ```
 
-### Fuente oficial de población
+## Fuente oficial de población
 
-A partir de la migración 010:
+La arquitectura vigente establece:
 
 ```text
 historial_poblacion
-```
+    → población diaria oficial
 
-es la fuente persistente utilizada por los nuevos flujos para:
-
-```text
-población diaria
-población actual
-histórico poblacional
-porcentaje de ocupación diario
-cupos disponibles
-```
-
-El campo:
-
-```text
 registros_diarios.poblacion
-```
-
-se conserva porque forma parte del consolidado diario histórico existente.
-
-No debe utilizarse en nuevos desarrollos como sustituto de `historial_poblacion`.
-
-### Backfill de la migración 010
-
-La migración 010 copia los valores históricos existentes desde:
-
-```text
-registros_diarios.poblacion
-```
-
-hacia:
-
-```text
-historial_poblacion
-```
-
-conservando:
-
-```text
-albergue_id
-fecha
-poblacion
-registrado_por
-created_at
-updated_at
-updated_by
-```
-
-cuando estos últimos campos existan.
-
-El proceso utiliza:
-
-```text
-$setOnInsert
-```
-
-por lo que:
-
-- no modifica los documentos de `registros_diarios`;
-- no sobrescribe registros ya presentes en `historial_poblacion`;
-- puede ejecutarse de manera repetible dentro del comportamiento definido por la migración.
-
-### Separación con métricas intradía
-
-La arquitectura diferencia:
-
-```text
-historial_poblacion
-    → población oficial diaria
+    → población histórica embebida en el consolidado diario
 
 metricas_albergue
     → telemetría y ocupación intradía
-
-registros_diarios
-    → consolidado diario histórico
 ```
 
-Por tanto, una medición intradía no debe sobrescribir el registro oficial de población diaria.
+Una medición intradía no debe sobrescribir automáticamente la población oficial diaria.
 
 ---
 
@@ -681,19 +648,30 @@ Incorporada mediante:
 
 Almacena casos activos de una enfermedad para una fecha determinada.
 
-Estructura principal:
+Estructura:
 
 ```javascript
 {
+    _id: ObjectId,
+
     albergue_id: ObjectId,
+
     fecha: Date,
+
     enfermedad: String,
+
     cantidad_casos_activos: Int32,
+
     observaciones: String,
+
     fuente_datos: String,
+
     registrado_por: ObjectId,
+
     created_at: Date,
+
     updated_at: Date,
+
     updated_by: ObjectId
 }
 ```
@@ -729,15 +707,26 @@ Estructura:
 
 ```javascript
 {
+    _id: ObjectId,
+
     albergue_id: ObjectId,
+
     fecha_intervencion: Date,
+
     tipo_intervencion: String,
+
     descripcion: String,
+
     observaciones: String,
+
     fuente_datos: String,
+
     registrado_por: ObjectId,
+
     created_at: Date,
+
     updated_at: Date,
+
     updated_by: ObjectId
 }
 ```
@@ -784,7 +773,7 @@ Computed Pattern
 
 para almacenar telemetría intradía agrupada por albergue y día.
 
-La regla estructural es:
+Regla:
 
 ```text
 1 documento
@@ -856,6 +845,7 @@ Estructura principal:
     },
 
     created_at: Date,
+
     updated_at: Date
 }
 ```
@@ -864,15 +854,6 @@ Estructura principal:
 
 ```text
 ux_metricas_albergue_albergue_fecha_bucket
-```
-
-Definición:
-
-```javascript
-{
-    albergue_id: 1,
-    fecha_bucket: 1
-}
 ```
 
 Único.
@@ -894,23 +875,19 @@ Incorporada mediante:
 009_create_analisis_ia.js
 ```
 
-## 15.1 Propósito
+Almacena resultados históricos de ejecuciones de modelos de inteligencia artificial.
 
-Almacena el resultado histórico de ejecuciones de modelos de inteligencia artificial.
-
-La colección sigue una regla fundamental:
+Regla:
 
 ```text
-cada ejecución IA
+1 ejecución IA
 =
-nuevo documento
+1 documento nuevo
 ```
 
 No se sobrescriben resultados históricos.
 
----
-
-## 15.2 Estructura
+Estructura:
 
 ```javascript
 {
@@ -933,25 +910,11 @@ No se sobrescriben resultados históricos.
     },
 
     datos_entrada: {
-        registros_diarios_ids: [
-            ObjectId
-        ],
-
-        condiciones_sanitarias_ids: [
-            ObjectId
-        ],
-
-        casos_enfermedades_ids: [
-            ObjectId
-        ],
-
-        intervenciones_ids: [
-            ObjectId
-        ],
-
-        metricas_albergue_ids: [
-            ObjectId
-        ]
+        registros_diarios_ids: [ObjectId],
+        condiciones_sanitarias_ids: [ObjectId],
+        casos_enfermedades_ids: [ObjectId],
+        intervenciones_ids: [ObjectId],
+        metricas_albergue_ids: [ObjectId]
     },
 
     preprocesamiento: {
@@ -977,137 +940,238 @@ No se sobrescriben resultados históricos.
 }
 ```
 
+`resultado.probabilidad_riesgo` cumple:
+
+```text
+0 <= probabilidad_riesgo <= 1
+```
+
+La probabilidad IA no representa directamente:
+
+```text
+verde
+amarillo
+rojo
+```
+
+La transformación hacia el Semáforo Vital corresponde a capas posteriores.
+
 ---
 
-# 16. Naturaleza histórica de `analisis_ia`
+# 15A. Colección `predicciones_sir`
 
-`analisis_ia` es una colección histórica.
-
-Ejemplo:
+Incorporada mediante:
 
 ```text
-Modelo v1.0.0
-Albergue A
-Ejecución 10:00
-    ↓
-Documento A
-
-Modelo v1.0.0
-Albergue A
-Ejecución 11:00
-    ↓
-Documento B
+011_create_predicciones_sir.js
 ```
 
-Ambos documentos deben conservarse.
+## Propósito
 
-Por esta razón no existen índices únicos sobre:
+Almacena resultados históricos de simulaciones epidemiológicas mediante modelos SIR.
+
+La colección conserva:
+
+- albergue;
+- enfermedad;
+- fecha de ejecución;
+- modelo y versión;
+- parámetros epidemiológicos;
+- condiciones iniciales;
+- horizonte temporal;
+- método numérico;
+- fuentes utilizadas;
+- información de preprocesamiento;
+- trayectoria S/I/R;
+- usuario asociado;
+- fecha técnica de persistencia.
+
+La regla principal es:
 
 ```text
-albergue_id
-fecha_ejecucion
-modelo.nombre
-modelo.version
+1 ejecución SIR
+=
+1 documento nuevo
 ```
 
-La colección tampoco utiliza:
+Las ejecuciones anteriores no deben sobrescribirse.
+
+## Estructura
+
+```javascript
+{
+    _id: ObjectId,
+
+    albergue_id: ObjectId,
+
+    escenario_id: ObjectId,
+
+    fecha_ejecucion: Date,
+
+    enfermedad: String,
+
+    publica: Boolean,
+
+    modelo: {
+        nombre: String,
+        version: String
+    },
+
+    parametros: {
+        beta: Number,
+        gamma: Number,
+
+        condiciones_iniciales: {
+            susceptibles: Int32,
+            infectados: Int32,
+            recuperados: Int32
+        },
+
+        horizonte_dias: Int32,
+
+        metodo_numerico: String
+    },
+
+    datos_entrada: {
+        analisis_ia_id: ObjectId,
+
+        historial_poblacion_ids: [
+            ObjectId
+        ],
+
+        casos_enfermedades_ids: [
+            ObjectId
+        ]
+    },
+
+    preprocesamiento: {
+        registros_considerados: Int32,
+        registros_descartados: Int32,
+        observaciones: String
+    },
+
+    trayectoria: [
+        {
+            dia: Int32,
+            susceptibles: Number,
+            infectados: Number,
+            recuperados: Number
+        }
+    ],
+
+    registrado_por: ObjectId,
+
+    created_at: Date
+}
+```
+
+## Naturaleza histórica
+
+No forman parte del contrato:
 
 ```text
 updated_at
 updated_by
 ```
 
-como parte del contrato vigente.
-
----
-
-# 17. Identificación del modelo IA
-
-Cada ejecución registra:
-
-```javascript
-modelo: {
-    nombre: String,
-    version: String
-}
-```
-
-Ejemplo:
-
-```javascript
-modelo: {
-    nombre: "riesgo_sanitario",
-    version: "1.0.0"
-}
-```
-
-Esto permite reproducir y auditar posteriormente qué versión del modelo produjo cada resultado.
-
----
-
-# 18. Periodo analizado
-
-Cada ejecución registra:
-
-```javascript
-periodo_analizado: {
-    fecha_inicio: Date,
-    fecha_fin: Date
-}
-```
-
-Regla conceptual:
+Dos ejecuciones pueden utilizar:
 
 ```text
-fecha_inicio <= fecha_fin
+mismo albergue
+misma enfermedad
+mismo modelo
+misma versión
+misma fecha_ejecucion
 ```
 
-`$jsonSchema` garantiza que ambos campos sean `Date`, pero la comparación entre ellos se controla mediante reglas DBA adicionales.
+y seguir siendo documentos diferentes.
 
-La migración 009 verifica documentos existentes con:
+Por esa razón los índices de SIR son no únicos.
+
+## Parámetros
+
+Reglas estructurales:
 
 ```text
-$expr
+beta >= 0
+gamma >= 0
+
+susceptibles >= 0
+infectados >= 0
+recuperados >= 0
+
+horizonte_dias >= 1
 ```
 
----
-
-# 19. Datos de entrada de IA
-
-La trazabilidad de datos utilizados se conserva en:
+Las condiciones iniciales:
 
 ```text
-datos_entrada
+susceptibles
+infectados
+recuperados
 ```
 
-Contiene:
+deben ser `Int32`.
+
+`beta` y `gamma` admiten tipos numéricos BSON:
 
 ```text
-registros_diarios_ids
-condiciones_sanitarias_ids
-casos_enfermedades_ids
-intervenciones_ids
-metricas_albergue_ids
+double
+int
+long
+decimal
+```
+
+No se aplica:
+
+```text
+maximum: 1
+```
+
+porque el contrato aprobado únicamente establece que sean no negativos.
+
+## Método numérico
+
+```text
+parametros.metodo_numerico
+```
+
+es:
+
+```text
+String
+```
+
+no vacío.
+
+Actualmente no existe un `enum`.
+
+La definición del catálogo de métodos numéricos corresponde al componente matemático y permanece pendiente de definición funcional.
+
+## Datos de entrada
+
+La trazabilidad utiliza:
+
+```text
+historial_poblacion_ids[]
+casos_enfermedades_ids[]
+analisis_ia_id
 ```
 
 Relaciones:
 
 ```text
-registros_diarios_ids[]
-    → registros_diarios._id
+predicciones_sir.datos_entrada.historial_poblacion_ids[]
+    → historial_poblacion._id
 
-condiciones_sanitarias_ids[]
-    → condiciones_sanitarias._id
-
-casos_enfermedades_ids[]
+predicciones_sir.datos_entrada.casos_enfermedades_ids[]
     → casos_enfermedades._id
 
-intervenciones_ids[]
-    → intervenciones._id
-
-metricas_albergue_ids[]
-    → metricas_albergue._id
+predicciones_sir.datos_entrada.analisis_ia_id
+    → analisis_ia._id
 ```
+
+`analisis_ia_id` es opcional.
 
 Los arrays utilizan:
 
@@ -1115,21 +1179,119 @@ Los arrays utilizan:
 uniqueItems: true
 ```
 
-para evitar referencias duplicadas dentro de la misma ejecución.
+No se impone actualmente:
 
-Los arrays pueden estar vacíos.
+```text
+minItems: 1
+```
 
-No se impone todavía una cantidad mínima de documentos de entrada porque no existe una regla funcional aprobada que la determine.
+porque el sistema deberá poder soportar posteriormente escenarios hipotéticos.
 
-La incorporación de `historial_poblacion` no modifica retroactivamente el contrato de `analisis_ia` definido en la migración 009.
+## Fuente poblacional
 
-Si en el futuro el modelo IA requiere trazabilidad explícita hacia población independiente, deberá implementarse mediante una nueva migración y no modificando la 009.
+Para las variables de población del modelo SIR se utiliza:
 
----
+```text
+historial_poblacion
+```
 
-# 20. Preprocesamiento IA
+como fuente persistente principal.
 
-Cada análisis registra información del procesamiento previo.
+No debe utilizarse como nueva fuente principal:
+
+```text
+registros_diarios.poblacion
+```
+
+## Trayectoria SIR
+
+Cada elemento contiene:
+
+```javascript
+{
+    dia: Int32,
+    susceptibles: Number,
+    infectados: Number,
+    recuperados: Number
+}
+```
+
+Reglas:
+
+```text
+dia >= 0
+
+susceptibles >= 0
+infectados >= 0
+recuperados >= 0
+```
+
+Los valores de S, I y R permiten decimales.
+
+Esto es deliberado porque un método numérico puede producir valores continuos.
+
+La trayectoria debe contener al menos:
+
+```text
+1 elemento
+```
+
+## Reglas matemáticas no impuestas
+
+El `$jsonSchema` no obliga actualmente:
+
+```text
+S + I + R = población inicial
+```
+
+ni:
+
+```text
+trayectoria.length = horizonte_dias + 1
+```
+
+ni:
+
+```text
+dia = 0, 1, 2, 3...
+```
+
+ni:
+
+```text
+S + I + R constante durante toda la trayectoria
+```
+
+Estas reglas deben ser definidas y verificadas por el componente matemático o Backend cuando exista una especificación formal aprobada.
+
+La ausencia de estas restricciones estructurales no significa que el modelo matemático deba ignorarlas.
+
+## `escenario_id`
+
+Es opcional.
+
+Referencia futura:
+
+```text
+predicciones_sir.escenario_id
+    → escenarios._id
+```
+
+Actualmente no existe control referencial porque `escenarios` aún no ha sido implementada.
+
+## `publica`
+
+```text
+publica
+```
+
+es un marcador booleano funcional.
+
+No representa una autorización de seguridad.
+
+Las decisiones de acceso o exposición de la simulación pertenecen a Backend.
+
+## Preprocesamiento
 
 Estructura:
 
@@ -1137,14 +1299,7 @@ Estructura:
 preprocesamiento: {
     registros_considerados: Int32,
     registros_descartados: Int32,
-
-    datos_faltantes: [
-        {
-            campo: String,
-            cantidad: Int32,
-            tratamiento: String
-        }
-    ]
+    observaciones: String
 }
 ```
 
@@ -1153,96 +1308,15 @@ Reglas:
 ```text
 registros_considerados >= 0
 registros_descartados >= 0
-datos_faltantes[].cantidad >= 0
 ```
 
-No existe actualmente un `enum` para:
+`observaciones` es opcional.
+
+## Índices
 
 ```text
-tratamiento
+ix_predicciones_sir_albergue_fecha
 ```
-
-porque el catálogo funcional de métodos de preprocesamiento todavía no ha sido aprobado.
-
----
-
-# 21. Resultado del análisis IA
-
-La estructura vigente es:
-
-```javascript
-resultado: {
-    probabilidad_riesgo: Number
-}
-```
-
-Regla:
-
-```text
-0 <= probabilidad_riesgo <= 1
-```
-
-Ejemplo:
-
-```javascript
-resultado: {
-    probabilidad_riesgo: 0.73
-}
-```
-
-Esta probabilidad:
-
-> No representa directamente el color del Semáforo Vital.
-
-La transformación hacia:
-
-```text
-verde
-amarillo
-rojo
-```
-
-corresponderá posteriormente a:
-
-```text
-alertas
-estados_semaforo
-```
-
----
-
-# 22. `escenario_id`
-
-`escenario_id` es actualmente opcional.
-
-Si existe debe ser:
-
-```text
-ObjectId
-```
-
-La referencia futura será:
-
-```text
-analisis_ia.escenario_id
-    → escenarios._id
-```
-
-Actualmente no se realiza `$lookup` contra `escenarios` porque esa colección todavía no ha sido implementada.
-
-No se crean dependencias ficticias.
-
----
-
-# 23. Índices de `analisis_ia`
-
-Índice:
-
-```text
-ix_analisis_ia_albergue_fecha
-```
-
-Definición:
 
 ```javascript
 {
@@ -1253,13 +1327,23 @@ Definición:
 
 No único.
 
-Segundo índice:
-
 ```text
-ix_analisis_ia_modelo_version_fecha
+ix_predicciones_sir_albergue_enfermedad_fecha
 ```
 
-Definición:
+```javascript
+{
+    albergue_id: 1,
+    enfermedad: 1,
+    fecha_ejecucion: -1
+}
+```
+
+No único.
+
+```text
+ix_predicciones_sir_modelo_version_fecha
+```
 
 ```javascript
 {
@@ -1271,43 +1355,71 @@ Definición:
 
 No único.
 
-Esto permite consultar:
-
-- historial de análisis por albergue;
-- ejecuciones recientes;
-- resultados por modelo;
-- resultados por versión.
-
 ---
 
-# 24. Separación conceptual IA y Semáforo Vital
+# 16. Naturaleza histórica de resultados analíticos
 
-La arquitectura conserva separación entre:
+Actualmente existen dos colecciones históricas de resultados analíticos:
 
 ```text
 analisis_ia
-    → resultado analítico
-
-alertas
-    → alertas oficiales
-
-estados_semaforo
-    → estado oficial del Semáforo Vital
+predicciones_sir
 ```
 
-Por tanto:
+En ambas:
 
 ```text
-probabilidad IA
-≠
-estado oficial
+1 ejecución
+=
+1 documento nuevo
 ```
 
-Esto evita mezclar resultados estadísticos o predictivos con decisiones funcionales del sistema.
+No se utilizan:
+
+```text
+updated_at
+updated_by
+```
+
+para representar nuevas ejecuciones.
+
+Las dos colecciones mantienen contratos distintos:
+
+```text
+analisis_ia
+    → resultado de análisis de riesgo
+
+predicciones_sir
+    → simulación epidemiológica S/I/R
+```
+
+No deben mezclarse en una sola colección.
 
 ---
 
-# 25. Manejo de fechas
+# 17. Identificación de modelos
+
+Tanto IA como SIR registran:
+
+```javascript
+modelo: {
+    nombre: String,
+    version: String
+}
+```
+
+Esto permite:
+
+```text
+trazabilidad
+reproducibilidad
+auditoría
+comparación entre versiones
+```
+
+---
+
+# 18. Manejo de fechas
 
 Zona horaria funcional:
 
@@ -1339,7 +1451,7 @@ fecha_calculo
 
 ---
 
-# 26. Integridad referencial
+# 19. Integridad referencial
 
 Referencias vigentes:
 
@@ -1395,37 +1507,29 @@ analisis_ia.albergue_id
 analisis_ia.registrado_por
     → usuarios._id
 
-analisis_ia.datos_entrada.registros_diarios_ids[]
-    → registros_diarios._id
+predicciones_sir.albergue_id
+    → albergues._id
 
-analisis_ia.datos_entrada.condiciones_sanitarias_ids[]
-    → condiciones_sanitarias._id
+predicciones_sir.registrado_por
+    → usuarios._id
 
-analisis_ia.datos_entrada.casos_enfermedades_ids[]
+predicciones_sir.datos_entrada.historial_poblacion_ids[]
+    → historial_poblacion._id
+
+predicciones_sir.datos_entrada.casos_enfermedades_ids[]
     → casos_enfermedades._id
 
-analisis_ia.datos_entrada.intervenciones_ids[]
-    → intervenciones._id
-
-analisis_ia.datos_entrada.metricas_albergue_ids[]
-    → metricas_albergue._id
+predicciones_sir.datos_entrada.analisis_ia_id
+    → analisis_ia._id
 ```
 
 MongoDB `$jsonSchema` valida tipos BSON pero no implementa claves foráneas.
 
 Los controles DBA complementan esta limitación mediante `$lookup`.
 
-En `historial_poblacion`, la migración 010 no implementa controles `$lookup` dentro del propio script. La suite DBA específica verifica que las referencias huérfanas sean detectables para:
-
-```text
-albergue_id
-registrado_por
-updated_by
-```
-
 ---
 
-# 27. Pruebas DBA
+# 20. Pruebas DBA
 
 ## Validaciones originales
 
@@ -1483,87 +1587,59 @@ test_historial_poblacion.js
 18/18
 ```
 
-La suite de `historial_poblacion` valida:
-
-1. documento válido;
-2. `albergue_id` obligatorio;
-3. `fecha` obligatoria;
-4. `poblacion` obligatoria;
-5. `registrado_por` obligatorio;
-6. `created_at` obligatorio;
-7. población negativa rechazada;
-8. población `Double` rechazada;
-9. propiedades adicionales rechazadas;
-10. población cero permitida;
-11. `updated_at` y `updated_by` permitidos;
-12. múltiples fechas para el mismo albergue;
-13. duplicado albergue + fecha rechazado;
-14. índice único correcto;
-15. migración 010 registrada exactamente una vez;
-16. detección de `albergue_id` huérfano;
-17. detección de `registrado_por` huérfano;
-18. detección de `updated_by` huérfano.
-
-Resultado:
+## Predicciones SIR
 
 ```text
-Pruebas exitosas: 18
-Pruebas fallidas: 0
+test_predicciones_sir.js
+35/35
 ```
 
-Las pruebas fueron repetidas después de ejecutar nuevamente:
-
-```text
-init_semaforo_vital.js
-```
-
-manteniendo:
-
-```text
-18/18
-```
-
----
-
-# 28. Pruebas de `analisis_ia`
-
-La suite:
-
-```text
-database/mongodb/tests/test_analisis_ia.js
-```
-
-valida:
+La suite SIR valida:
 
 1. documento válido;
 2. `albergue_id` obligatorio;
 3. `fecha_ejecucion` obligatoria;
-4. `periodo_analizado` obligatorio;
-5. nombre de modelo no vacío;
-6. probabilidad menor que 0 rechazada;
-7. probabilidad mayor que 1 rechazada;
-8. `registrado_por` como ObjectId;
-9. registros descartados no negativos;
-10. referencias duplicadas rechazadas;
-11. propiedades adicionales rechazadas;
-12. `updated_at` rechazado;
-13. `escenario_id` opcional;
-14. `escenario_id` como ObjectId;
-15. múltiples ejecuciones históricas permitidas;
-16. índices correctos y no únicos;
-17. detección de albergue huérfano;
-18. detección de usuario huérfano;
-19. detección de referencia huérfana de entrada;
-20. detección de periodo temporal inválido.
+4. `enfermedad` obligatoria;
+5. enfermedad no vacía;
+6. `publica` Boolean;
+7. beta no negativo;
+8. gamma no negativo;
+9. condiciones iniciales `Int32`;
+10. condiciones iniciales no negativas;
+11. `horizonte_dias >= 1`;
+12. método numérico no vacío;
+13. trayectoria no vacía;
+14. día no negativo;
+15. valores SIR no negativos;
+16. trayectoria admite decimales;
+17. referencias poblacionales sin duplicados;
+18. referencias de casos sin duplicados;
+19. propiedades adicionales rechazadas;
+20. `updated_at` rechazado;
+21. `escenario_id` opcional;
+22. `escenario_id` como ObjectId;
+23. `analisis_ia_id` opcional;
+24. `analisis_ia_id` como ObjectId;
+25. múltiples ejecuciones históricas permitidas;
+26. tres índices SIR correctos y no únicos;
+27. migración 011 registrada exactamente una vez;
+28. detección de `albergue_id` huérfano;
+29. detección de `registrado_por` huérfano;
+30. detección de referencia huérfana hacia `historial_poblacion`;
+31. detección de referencia huérfana hacia `casos_enfermedades`;
+32. detección de referencia huérfana hacia `analisis_ia`;
+33. observaciones de preprocesamiento opcionales;
+34. beta y gamma pueden superar 1;
+35. `$jsonSchema` no impone todavía `S + I + R = población`.
 
 Resultado:
 
 ```text
-Pruebas exitosas: 20
+Pruebas exitosas: 35
 Pruebas fallidas: 0
 ```
 
-Las pruebas fueron repetidas después de ejecutar nuevamente:
+La suite fue repetida después de ejecutar:
 
 ```text
 init_semaforo_vital.js
@@ -1572,12 +1648,12 @@ init_semaforo_vital.js
 manteniendo:
 
 ```text
-20/20
+35/35
 ```
 
 ---
 
-# 29. Índices vigentes
+# 21. Índices vigentes
 
 ## `usuarios`
 
@@ -1604,15 +1680,6 @@ ux_registros_diarios_albergue_fecha
 
 ```text
 ux_historial_poblacion_albergue_fecha
-```
-
-Definición:
-
-```javascript
-{
-    albergue_id: 1,
-    fecha: -1
-}
 ```
 
 Único.
@@ -1660,6 +1727,16 @@ ix_analisis_ia_modelo_version_fecha
 
 No únicos.
 
+## `predicciones_sir`
+
+```text
+ix_predicciones_sir_albergue_fecha
+ix_predicciones_sir_albergue_enfermedad_fecha
+ix_predicciones_sir_modelo_version_fecha
+```
+
+No únicos.
+
 ## `schema_migrations`
 
 ```text
@@ -1670,7 +1747,7 @@ ux_schema_migrations_version
 
 ---
 
-# 30. Seguridad
+# 22. Seguridad
 
 No deben versionarse:
 
@@ -1680,22 +1757,195 @@ No deben versionarse:
 - tokens;
 - secretos.
 
-`analisis_ia` debe trabajar con información agregada y referencias documentales.
+Las colecciones analíticas trabajan con datos agregados y referencias documentales.
 
-No debe almacenar:
+No deben almacenar:
 
 ```text
 nombres de pacientes
 documentos de identidad
 historias clínicas
-datos sensibles individualizados
+datos clínicos individualizados
 credenciales
 secretos
 ```
 
+`historial_poblacion` almacena cantidades agregadas.
+
+`predicciones_sir` almacena resultados epidemiológicos agregados.
+
 ---
 
-# 31. Reglas para evolución
+# 23. Responsabilidad DBA
+
+La capa DBA garantiza:
+
+- estructura documental;
+- tipos BSON;
+- campos obligatorios;
+- validadores;
+- índices;
+- unicidad donde corresponda;
+- migraciones;
+- estado reproducible;
+- referencias estructurales;
+- controles de documentos huérfanos;
+- contrato poblacional;
+- contrato Bucket Pattern;
+- contrato Computed Pattern;
+- contrato histórico IA;
+- contrato histórico SIR;
+- versionado de modelos;
+- trazabilidad documental de entradas;
+- validación estructural de parámetros SIR;
+- validación estructural de trayectoria;
+- pruebas de integridad.
+
+MongoDB no ejecuta:
+
+```text
+modelo IA
+modelo SIR
+clasificación de riesgo
+reglas del Semáforo Vital
+```
+
+MongoDB persiste y valida el contrato.
+
+---
+
+# 24. Responsabilidad de Backend y componentes analíticos
+
+Backend y los componentes especializados deberán garantizar:
+
+- referencias válidas antes de persistir;
+- fechas normalizadas;
+- construcción correcta de arrays de entrada;
+- coherencia entre albergue y datos fuente;
+- creación de nuevos documentos para nuevas ejecuciones analíticas;
+- no sobrescribir históricos;
+- modelo y versión correctos;
+- parámetros epidemiológicos correctos;
+- ejecución del método numérico;
+- coherencia matemática de la trayectoria;
+- manejo de errores de validación MongoDB.
+
+Para SIR deberá validarse fuera del `$jsonSchema`, cuando la especificación matemática lo determine:
+
+```text
+coherencia S + I + R
+secuencia de días
+conservación poblacional
+longitud de trayectoria
+coherencia con horizonte_dias
+coherencia entre enfermedad y fuentes utilizadas
+```
+
+---
+
+# 25. Arquitectura analítica
+
+```text
+historial_poblacion
+          │
+          │
+          ├───────────────┐
+          │               │
+          ▼               ▼
+ población diaria      modelo SIR
+                          ▲
+                          │
+                 casos_enfermedades
+                          │
+                          ▼
+                 predicciones_sir
+```
+
+Por otra parte:
+
+```text
+datos operativos
+      │
+      ▼
+analisis_ia
+      │
+      ▼
+resultado analítico
+```
+
+Posteriormente:
+
+```text
+analisis_ia
+        │
+        ├──────────────┐
+        │              │
+        ▼              ▼
+predicciones_sir     alertas
+        │              │
+        └──────┬───────┘
+               ▼
+       estados_semaforo
+               │
+               ▼
+metricas_albergue.estado_actual
+               │
+               ▼
+             Redis
+```
+
+---
+
+# 26. Redis
+
+La arquitectura aprobada establece:
+
+```text
+MongoDB
+    → fuente persistente de verdad
+
+metricas_albergue.estado_actual
+    → snapshot persistente
+
+Redis
+    → caché temporal
+```
+
+Redis no reemplazará:
+
+```text
+historial_poblacion
+metricas_albergue
+analisis_ia
+predicciones_sir
+alertas
+estados_semaforo
+```
+
+Clave prevista:
+
+```text
+semaforo:estado:{albergue_id}
+```
+
+TTL inicial:
+
+```text
+900 segundos
+```
+
+Ante fallo de Redis:
+
+```text
+Backend
+    → MongoDB
+```
+
+La integración Redis corresponde a un checkpoint posterior.
+
+---
+
+# 27. Reglas para evolución
 
 Todo cambio nuevo debe seguir:
 
@@ -1717,29 +1967,18 @@ Pull Request
 
 Las migraciones aplicadas no deben modificarse retroactivamente.
 
-Si una regla funcional aún no está definida, no debe convertirse unilateralmente en una restricción estructural.
-
-Cuando otro componente autorizado incorpore una migración nueva, el DBA debe:
+Antes de crear una migración debe verificarse:
 
 ```text
-revisar el contrato
-    ↓
-validar impacto
-    ↓
-aplicar la migración
-    ↓
-alinear el init
-    ↓
-incorporar pruebas DBA
-    ↓
-actualizar documentación
+main actualizado
+última migración
+cambios integrados por otros componentes
+impacto sobre contratos existentes
 ```
-
-sin reescribir retroactivamente la migración ya integrada.
 
 ---
 
-# 32. Estado actual
+# 28. Estado actual
 
 Colecciones:
 
@@ -1753,6 +1992,7 @@ casos_enfermedades              ✓
 intervenciones                  ✓
 metricas_albergue               ✓
 analisis_ia                     ✓
+predicciones_sir                ✓
 schema_migrations               ✓
 ```
 
@@ -1768,10 +2008,11 @@ Migraciones:
 007_create_intervenciones                 ✓
 008_create_metricas_albergue              ✓
 009_create_analisis_ia                    ✓
-010_create_historial_poblacion             ✓
+010_create_historial_poblacion            ✓
+011_create_predicciones_sir               ✓
 ```
 
-Pruebas específicas recientes:
+Pruebas específicas:
 
 ```text
 condiciones_sanitarias     14/14
@@ -1780,6 +2021,31 @@ intervenciones             15/15
 metricas_albergue          18/18
 analisis_ia                20/20
 historial_poblacion        18/18
+predicciones_sir           35/35
+```
+
+El Checkpoint 7 deja implementado:
+
+```text
+Colección predicciones_sir                     ✓
+Migración 011                                   ✓
+Naturaleza histórica                            ✓
+Modelo y versión                                ✓
+beta y gamma                                    ✓
+Condiciones iniciales S/I/R                     ✓
+Horizonte temporal                              ✓
+Método numérico                                 ✓
+Trazabilidad historial_poblacion                ✓
+Trazabilidad casos_enfermedades                 ✓
+analisis_ia_id opcional                         ✓
+escenario_id preparado                          ✓
+Preprocesamiento                                ✓
+Trayectoria S/I/R                               ✓
+Índices históricos no únicos                    ✓
+Control de referencias                          ✓
+Init reproducible                               ✓
+Pruebas DBA                                    35/35
+Documentación                                   ✓
 ```
 
 El estado estructural vigente se encuentra en:
@@ -1794,32 +2060,10 @@ La evolución histórica se encuentra en:
 database/mongodb/migrations/
 ```
 
-La arquitectura poblacional vigente es:
+El siguiente número de migración disponible es:
 
 ```text
-historial_poblacion
-    → fuente persistente oficial de población diaria
-
-registros_diarios.poblacion
-    → dato histórico conservado en el consolidado diario
-
-metricas_albergue
-    → telemetría y ocupación intradía
+012
 ```
 
-Las colecciones:
-
-```text
-analisis_ia
-historial_poblacion
-```
-
-dejan preparada la capa persistente antes de avanzar hacia:
-
-```text
-predicciones_sir
-alertas
-estados_semaforo
-```
-
-La próxima implementación de `predicciones_sir` deberá revisar `historial_poblacion` como fuente poblacional y utilizar el número de migración disponible después de la 010.
+siempre que no exista una nueva migración integrada en `main` antes de iniciar el siguiente checkpoint.

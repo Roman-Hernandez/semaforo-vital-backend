@@ -14,6 +14,7 @@
 //   - intervenciones
 //   - metricas_albergue
 //   - analisis_ia
+//   - predicciones_sir
 //   - schema_migrations
 //
 // Responsabilidad:
@@ -30,12 +31,18 @@
 // Las migraciones versionadas representan la evolución
 // histórica de ambientes existentes.
 //
-// historial_poblacion fue incorporada mediante la migración:
+// historial_poblacion fue incorporada mediante:
 //
 //   010_create_historial_poblacion
 //
-// El backfill desde registros_diarios pertenece exclusivamente
-// a la migración 010 y NO se ejecuta desde este init.
+// predicciones_sir fue incorporada mediante:
+//
+//   011_create_predicciones_sir
+//
+// El backfill desde registros_diarios hacia historial_poblacion
+// pertenece exclusivamente a la migración 010.
+//
+// El init NO ejecuta transformaciones históricas.
 // ============================================================
 
 db = db.getSiblingDB("semaforo_vital");
@@ -78,6 +85,7 @@ const validatorUsuarios = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
@@ -121,6 +129,7 @@ const validatorUsuarios = {
             },
 
             active: {
+
                 bsonType:
                     "bool"
             },
@@ -152,11 +161,13 @@ const validatorUsuarios = {
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_at: {
+
                 bsonType:
                     "date"
             },
@@ -579,15 +590,12 @@ const validatorRegistrosDiarios = {
 //   =
 //   1 registro de población.
 //
-// Esta colección fue incorporada mediante:
+// Incorporada mediante:
 //
 //   010_create_historial_poblacion.js
 //
 // registros_diarios.poblacion se conserva por compatibilidad
-// con el consolidado diario existente.
-//
-// Los nuevos flujos de consulta y registro de población
-// utilizan historial_poblacion.
+// con el consolidado histórico.
 //
 // ============================================================
 
@@ -1887,7 +1895,431 @@ const validatorAnalisisIA = {
 
 
 // ============================================================
-// 10. FUNCIÓN IDEMPOTENTE
+// 10. VALIDADOR - PREDICCIONES SIR
+// ============================================================
+//
+// Colección histórica.
+//
+// Cada ejecución SIR genera un documento nuevo.
+//
+// No se utilizan:
+//
+//   updated_at
+//   updated_by
+//
+// Fuentes principales:
+//
+//   historial_poblacion
+//   casos_enfermedades
+//
+// analisis_ia_id es opcional.
+//
+// escenario_id es opcional hasta implementar escenarios.
+//
+// MongoDB persiste y valida la estructura.
+// El cálculo matemático pertenece al componente SIR.
+// ============================================================
+
+const validatorPrediccionesSIR = {
+
+    $jsonSchema: {
+
+        bsonType:
+            "object",
+
+        title:
+            "Esquema de validación de predicciones SIR",
+
+        additionalProperties:
+            false,
+
+        required: [
+            "albergue_id",
+            "fecha_ejecucion",
+            "enfermedad",
+            "publica",
+            "modelo",
+            "parametros",
+            "datos_entrada",
+            "preprocesamiento",
+            "trayectoria",
+            "registrado_por",
+            "created_at"
+        ],
+
+        properties: {
+
+            _id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            albergue_id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            escenario_id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            fecha_ejecucion: {
+
+                bsonType:
+                    "date"
+            },
+
+            enfermedad: {
+
+                bsonType:
+                    "string",
+
+                minLength:
+                    1
+            },
+
+            publica: {
+
+                bsonType:
+                    "bool"
+            },
+
+            modelo: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+                    "nombre",
+                    "version"
+                ],
+
+                properties: {
+
+                    nombre: {
+
+                        bsonType:
+                            "string",
+
+                        minLength:
+                            1
+                    },
+
+                    version: {
+
+                        bsonType:
+                            "string",
+
+                        minLength:
+                            1
+                    }
+                }
+            },
+
+            parametros: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+                    "beta",
+                    "gamma",
+                    "condiciones_iniciales",
+                    "horizonte_dias",
+                    "metodo_numerico"
+                ],
+
+                properties: {
+
+                    beta: {
+
+                        bsonType: [
+                            "double",
+                            "int",
+                            "long",
+                            "decimal"
+                        ],
+
+                        minimum:
+                            0
+                    },
+
+                    gamma: {
+
+                        bsonType: [
+                            "double",
+                            "int",
+                            "long",
+                            "decimal"
+                        ],
+
+                        minimum:
+                            0
+                    },
+
+                    condiciones_iniciales: {
+
+                        bsonType:
+                            "object",
+
+                        additionalProperties:
+                            false,
+
+                        required: [
+                            "susceptibles",
+                            "infectados",
+                            "recuperados"
+                        ],
+
+                        properties: {
+
+                            susceptibles: {
+
+                                bsonType:
+                                    "int",
+
+                                minimum:
+                                    0
+                            },
+
+                            infectados: {
+
+                                bsonType:
+                                    "int",
+
+                                minimum:
+                                    0
+                            },
+
+                            recuperados: {
+
+                                bsonType:
+                                    "int",
+
+                                minimum:
+                                    0
+                            }
+                        }
+                    },
+
+                    horizonte_dias: {
+
+                        bsonType:
+                            "int",
+
+                        minimum:
+                            1
+                    },
+
+                    metodo_numerico: {
+
+                        bsonType:
+                            "string",
+
+                        minLength:
+                            1
+                    }
+                }
+            },
+
+            datos_entrada: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+                    "historial_poblacion_ids",
+                    "casos_enfermedades_ids"
+                ],
+
+                properties: {
+
+                    analisis_ia_id: {
+
+                        bsonType:
+                            "objectId"
+                    },
+
+                    historial_poblacion_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    },
+
+                    casos_enfermedades_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        }
+                    }
+                }
+            },
+
+            preprocesamiento: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                required: [
+                    "registros_considerados",
+                    "registros_descartados"
+                ],
+
+                properties: {
+
+                    registros_considerados: {
+
+                        bsonType:
+                            "int",
+
+                        minimum:
+                            0
+                    },
+
+                    registros_descartados: {
+
+                        bsonType:
+                            "int",
+
+                        minimum:
+                            0
+                    },
+
+                    observaciones: {
+
+                        bsonType:
+                            "string"
+                    }
+                }
+            },
+
+            trayectoria: {
+
+                bsonType:
+                    "array",
+
+                minItems:
+                    1,
+
+                items: {
+
+                    bsonType:
+                        "object",
+
+                    additionalProperties:
+                        false,
+
+                    required: [
+                        "dia",
+                        "susceptibles",
+                        "infectados",
+                        "recuperados"
+                    ],
+
+                    properties: {
+
+                        dia: {
+
+                            bsonType:
+                                "int",
+
+                            minimum:
+                                0
+                        },
+
+                        susceptibles: {
+
+                            bsonType: [
+                                "double",
+                                "int",
+                                "long",
+                                "decimal"
+                            ],
+
+                            minimum:
+                                0
+                        },
+
+                        infectados: {
+
+                            bsonType: [
+                                "double",
+                                "int",
+                                "long",
+                                "decimal"
+                            ],
+
+                            minimum:
+                                0
+                        },
+
+                        recuperados: {
+
+                            bsonType: [
+                                "double",
+                                "int",
+                                "long",
+                                "decimal"
+                            ],
+
+                            minimum:
+                                0
+                        }
+                    }
+                }
+            },
+
+            registrado_por: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            created_at: {
+
+                bsonType:
+                    "date"
+            }
+        }
+    }
+};
+
+
+// ============================================================
+// 11. FUNCIÓN IDEMPOTENTE
 // ============================================================
 
 function crearOActualizarColeccion(
@@ -1965,7 +2397,7 @@ function crearOActualizarColeccion(
 
 
 // ============================================================
-// 11. CREAR / ACTUALIZAR COLECCIONES
+// 12. CREAR / ACTUALIZAR COLECCIONES
 // ============================================================
 
 crearOActualizarColeccion(
@@ -2022,8 +2454,14 @@ crearOActualizarColeccion(
 );
 
 
+crearOActualizarColeccion(
+    "predicciones_sir",
+    validatorPrediccionesSIR
+);
+
+
 // ============================================================
-// 12. SCHEMA MIGRATIONS
+// 13. SCHEMA MIGRATIONS
 // ============================================================
 
 if (
@@ -2052,7 +2490,7 @@ if (
 
 
 // ============================================================
-// 13. ÍNDICES
+// 14. ÍNDICES
 // ============================================================
 
 print("");
@@ -2065,10 +2503,12 @@ print("Configurando índices...");
 
 db.usuarios.createIndex(
     {
+
         email:
             1
     },
     {
+
         name:
             "ux_usuarios_email",
 
@@ -2085,10 +2525,12 @@ print(
 
 db.usuarios.createIndex(
     {
+
         albergue_id:
             1
     },
     {
+
         name:
             "ix_usuarios_albergue_id"
     }
@@ -2106,10 +2548,12 @@ print(
 
 db.albergues.createIndex(
     {
+
         codigo_albergue:
             1
     },
     {
+
         name:
             "ux_albergues_codigo_albergue",
 
@@ -2131,6 +2575,7 @@ print(
 
 db.registros_diarios.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2138,6 +2583,7 @@ db.registros_diarios.createIndex(
             -1
     },
     {
+
         name:
             "ux_registros_diarios_albergue_fecha",
 
@@ -2156,16 +2602,10 @@ print(
 // ------------------------------------------------------------
 // historial_poblacion
 // ------------------------------------------------------------
-//
-// Un único registro de población por albergue y fecha.
-//
-// Debe coincidir con el índice creado por:
-//   010_create_historial_poblacion.js
-//
-// ------------------------------------------------------------
 
 db.historial_poblacion.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2173,6 +2613,7 @@ db.historial_poblacion.createIndex(
             -1
     },
     {
+
         name:
             "ux_historial_poblacion_albergue_fecha",
 
@@ -2194,6 +2635,7 @@ print(
 
 db.condiciones_sanitarias.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2201,6 +2643,7 @@ db.condiciones_sanitarias.createIndex(
             -1
     },
     {
+
         name:
             "ix_condiciones_sanitarias_albergue_fecha"
     }
@@ -2219,6 +2662,7 @@ print(
 
 db.casos_enfermedades.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2226,6 +2670,7 @@ db.casos_enfermedades.createIndex(
             -1
     },
     {
+
         name:
             "ix_casos_enfermedades_albergue_fecha"
     }
@@ -2240,6 +2685,7 @@ print(
 
 db.casos_enfermedades.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2250,6 +2696,7 @@ db.casos_enfermedades.createIndex(
             -1
     },
     {
+
         name:
             "ix_casos_enfermedades_albergue_enfermedad_fecha"
     }
@@ -2268,6 +2715,7 @@ print(
 
 db.intervenciones.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2275,6 +2723,7 @@ db.intervenciones.createIndex(
             -1
     },
     {
+
         name:
             "ix_intervenciones_albergue_fecha"
     }
@@ -2289,6 +2738,7 @@ print(
 
 db.intervenciones.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2299,6 +2749,7 @@ db.intervenciones.createIndex(
             -1
     },
     {
+
         name:
             "ix_intervenciones_albergue_tipo_fecha"
     }
@@ -2317,6 +2768,7 @@ print(
 
 db.metricas_albergue.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2324,6 +2776,7 @@ db.metricas_albergue.createIndex(
             1
     },
     {
+
         name:
             "ux_metricas_albergue_albergue_fecha_bucket",
 
@@ -2350,6 +2803,7 @@ print(
 
 db.analisis_ia.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2357,6 +2811,7 @@ db.analisis_ia.createIndex(
             -1
     },
     {
+
         name:
             "ix_analisis_ia_albergue_fecha"
     }
@@ -2371,6 +2826,7 @@ print(
 
 db.analisis_ia.createIndex(
     {
+
         "modelo.nombre":
             1,
 
@@ -2381,6 +2837,7 @@ db.analisis_ia.createIndex(
             -1
     },
     {
+
         name:
             "ix_analisis_ia_modelo_version_fecha"
     }
@@ -2394,15 +2851,101 @@ print(
 
 
 // ------------------------------------------------------------
+// predicciones_sir
+// ------------------------------------------------------------
+//
+// Histórico.
+//
+// Ninguno de los índices SIR debe ser UNIQUE.
+// ------------------------------------------------------------
+
+db.predicciones_sir.createIndex(
+    {
+
+        albergue_id:
+            1,
+
+        fecha_ejecucion:
+            -1
+    },
+    {
+
+        name:
+            "ix_predicciones_sir_albergue_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_predicciones_sir_albergue_fecha"
+);
+
+
+db.predicciones_sir.createIndex(
+    {
+
+        albergue_id:
+            1,
+
+        enfermedad:
+            1,
+
+        fecha_ejecucion:
+            -1
+    },
+    {
+
+        name:
+            "ix_predicciones_sir_albergue_enfermedad_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_predicciones_sir_albergue_enfermedad_fecha"
+);
+
+
+db.predicciones_sir.createIndex(
+    {
+
+        "modelo.nombre":
+            1,
+
+        "modelo.version":
+            1,
+
+        fecha_ejecucion:
+            -1
+    },
+    {
+
+        name:
+            "ix_predicciones_sir_modelo_version_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_predicciones_sir_modelo_version_fecha"
+);
+
+
+// ------------------------------------------------------------
 // schema_migrations
 // ------------------------------------------------------------
 
 db.schema_migrations.createIndex(
     {
+
         version:
             1
     },
     {
+
         name:
             "ux_schema_migrations_version",
 
@@ -2419,7 +2962,7 @@ print(
 
 
 // ============================================================
-// 14. RESULTADO
+// 15. RESULTADO
 // ============================================================
 
 print("");
@@ -2427,40 +2970,65 @@ print("====================================================");
 print(" INICIALIZACIÓN FINALIZADA");
 print("====================================================");
 
+
 print(
     "✓ Colecciones creadas/actualizadas"
 );
+
 
 print(
     "✓ Validadores vigentes"
 );
 
+
 print(
     "✓ Índices vigentes"
 );
+
 
 print(
     "✓ historial_poblacion disponible como fuente de población diaria"
 );
 
+
 print(
     "✓ Bucket Pattern disponible en metricas_albergue"
 );
+
 
 print(
     "✓ Computed Pattern disponible en metricas_albergue"
 );
 
+
 print(
     "✓ analisis_ia histórico disponible"
 );
+
 
 print(
     "✓ Trazabilidad de entradas IA disponible"
 );
 
+
+print(
+    "✓ predicciones_sir histórico disponible"
+);
+
+
+print(
+    "✓ Trazabilidad poblacional SIR mediante historial_poblacion"
+);
+
+
+print(
+    "✓ Trayectoria epidemiológica SIR disponible"
+);
+
+
 print(
     "✓ Inicialización reejecutable"
 );
+
 
 print("");
