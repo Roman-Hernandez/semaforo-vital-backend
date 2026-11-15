@@ -48,15 +48,6 @@
 // pertenece exclusivamente a la migración 010.
 //
 // El init NO ejecuta transformaciones históricas.
-//
-// metricas_albergue.estado_actual.alertas_activas.ids[]
-// queda estructuralmente preparado para referenciar:
-//
-//   alertas._id
-//
-// La integridad referencial cruzada se valida en controles DBA
-// y se endurecerá en checkpoints posteriores.
-//
 // ============================================================
 
 db = db.getSiblingDB("semaforo_vital");
@@ -99,6 +90,7 @@ const validatorUsuarios = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
@@ -142,6 +134,7 @@ const validatorUsuarios = {
             },
 
             active: {
+
                 bsonType:
                     "bool"
             },
@@ -173,11 +166,13 @@ const validatorUsuarios = {
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_at: {
+
                 bsonType:
                     "date"
             },
@@ -270,6 +265,7 @@ const validatorAlbergues = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
@@ -422,31 +418,37 @@ const validatorAlbergues = {
             },
 
             activo: {
+
                 bsonType:
                     "bool"
             },
 
             registrado_por: {
+
                 bsonType:
                     "objectId"
             },
 
             fecha: {
+
                 bsonType:
                     "date"
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_by: {
+
                 bsonType:
                     "objectId"
             }
@@ -487,16 +489,19 @@ const validatorRegistrosDiarios = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
 
             albergue_id: {
+
                 bsonType:
                     "objectId"
             },
 
             fecha: {
+
                 bsonType:
                     "date"
             },
@@ -551,21 +556,25 @@ const validatorRegistrosDiarios = {
             },
 
             registrado_por: {
+
                 bsonType:
                     "objectId"
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_by: {
+
                 bsonType:
                     "objectId"
             }
@@ -619,16 +628,19 @@ const validatorHistorialPoblacion = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
 
             albergue_id: {
+
                 bsonType:
                     "objectId"
             },
 
             fecha: {
+
                 bsonType:
                     "date"
             },
@@ -643,21 +655,25 @@ const validatorHistorialPoblacion = {
             },
 
             registrado_por: {
+
                 bsonType:
                     "objectId"
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_by: {
+
                 bsonType:
                     "objectId"
             }
@@ -698,21 +714,25 @@ const validatorCondicionesSanitarias = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
 
             albergue_id: {
+
                 bsonType:
                     "objectId"
             },
 
             fecha: {
+
                 bsonType:
                     "date"
             },
 
             agua_potable_disponible: {
+
                 bsonType:
                     "bool"
             },
@@ -783,6 +803,7 @@ const validatorCondicionesSanitarias = {
                         },
 
                         observacion: {
+
                             bsonType:
                                 "string"
                         }
@@ -791,6 +812,7 @@ const validatorCondicionesSanitarias = {
             },
 
             observaciones: {
+
                 bsonType:
                     "string"
             },
@@ -805,21 +827,25 @@ const validatorCondicionesSanitarias = {
             },
 
             registrado_por: {
+
                 bsonType:
                     "objectId"
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_by: {
+
                 bsonType:
                     "objectId"
             }
@@ -858,16 +884,19 @@ const validatorCasosEnfermedades = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
 
             albergue_id: {
+
                 bsonType:
                     "objectId"
             },
 
             fecha: {
+
                 bsonType:
                     "date"
             },
@@ -891,6 +920,7 @@ const validatorCasosEnfermedades = {
             },
 
             observaciones: {
+
                 bsonType:
                     "string"
             },
@@ -905,21 +935,25 @@ const validatorCasosEnfermedades = {
             },
 
             registrado_por: {
+
                 bsonType:
                     "objectId"
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_by: {
+
                 bsonType:
                     "objectId"
             }
@@ -958,16 +992,19 @@ const validatorIntervenciones = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
 
             albergue_id: {
+
                 bsonType:
                     "objectId"
             },
 
             fecha_intervencion: {
+
                 bsonType:
                     "date"
             },
@@ -991,6 +1028,7 @@ const validatorIntervenciones = {
             },
 
             observaciones: {
+
                 bsonType:
                     "string"
             },
@@ -1005,21 +1043,25 @@ const validatorIntervenciones = {
             },
 
             registrado_por: {
+
                 bsonType:
                     "objectId"
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_by: {
+
                 bsonType:
                     "objectId"
             }
@@ -1030,24 +1072,6 @@ const validatorIntervenciones = {
 
 // ============================================================
 // 8. VALIDADOR - METRICAS ALBERGUE
-// ============================================================
-//
-// Bucket Pattern + Computed Pattern.
-//
-// estado_actual continúa siendo opcional.
-//
-// A partir de la migración 012 ya existe:
-//
-//   alertas
-//
-// Por tanto:
-//
-// estado_actual.alertas_activas.ids[]
-//     → alertas._id
-//
-// tiene colección destino disponible.
-//
-// La futura colección estados_semaforo continúa pendiente.
 // ============================================================
 
 const validatorMetricasAlbergue = {
@@ -1076,16 +1100,19 @@ const validatorMetricasAlbergue = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
 
             albergue_id: {
+
                 bsonType:
                     "objectId"
             },
 
             fecha_bucket: {
+
                 bsonType:
                     "date"
             },
@@ -1117,6 +1144,7 @@ const validatorMetricasAlbergue = {
                     properties: {
 
                         fecha_hora: {
+
                             bsonType:
                                 "date"
                         },
@@ -1286,6 +1314,7 @@ const validatorMetricasAlbergue = {
                 properties: {
 
                     fecha_hora: {
+
                         bsonType:
                             "date"
                     },
@@ -1434,16 +1463,19 @@ const validatorMetricasAlbergue = {
                             },
 
                             codigo: {
+
                                 bsonType:
                                     "int"
                             },
 
                             estado_semaforo_id: {
+
                                 bsonType:
                                     "objectId"
                             },
 
                             fecha_calculo: {
+
                                 bsonType:
                                     "date"
                             }
@@ -1494,11 +1526,13 @@ const validatorMetricasAlbergue = {
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             },
 
             updated_at: {
+
                 bsonType:
                     "date"
             }
@@ -1548,21 +1582,25 @@ const validatorAnalisisIA = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
 
             albergue_id: {
+
                 bsonType:
                     "objectId"
             },
 
             escenario_id: {
+
                 bsonType:
                     "objectId"
             },
 
             fecha_ejecucion: {
+
                 bsonType:
                     "date"
             },
@@ -1583,11 +1621,13 @@ const validatorAnalisisIA = {
                 properties: {
 
                     fecha_inicio: {
+
                         bsonType:
                             "date"
                     },
 
                     fecha_fin: {
+
                         bsonType:
                             "date"
                     }
@@ -1656,6 +1696,7 @@ const validatorAnalisisIA = {
                             true,
 
                         items: {
+
                             bsonType:
                                 "objectId"
                         }
@@ -1670,6 +1711,7 @@ const validatorAnalisisIA = {
                             true,
 
                         items: {
+
                             bsonType:
                                 "objectId"
                         }
@@ -1684,6 +1726,7 @@ const validatorAnalisisIA = {
                             true,
 
                         items: {
+
                             bsonType:
                                 "objectId"
                         }
@@ -1698,6 +1741,7 @@ const validatorAnalisisIA = {
                             true,
 
                         items: {
+
                             bsonType:
                                 "objectId"
                         }
@@ -1712,6 +1756,7 @@ const validatorAnalisisIA = {
                             true,
 
                         items: {
+
                             bsonType:
                                 "objectId"
                         }
@@ -1839,11 +1884,13 @@ const validatorAnalisisIA = {
             },
 
             registrado_por: {
+
                 bsonType:
                     "objectId"
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             }
@@ -1908,21 +1955,25 @@ const validatorPrediccionesSIR = {
         properties: {
 
             _id: {
+
                 bsonType:
                     "objectId"
             },
 
             albergue_id: {
+
                 bsonType:
                     "objectId"
             },
 
             escenario_id: {
+
                 bsonType:
                     "objectId"
             },
 
             fecha_ejecucion: {
+
                 bsonType:
                     "date"
             },
@@ -1937,6 +1988,7 @@ const validatorPrediccionesSIR = {
             },
 
             publica: {
+
                 bsonType:
                     "bool"
             },
@@ -2101,6 +2153,7 @@ const validatorPrediccionesSIR = {
                 properties: {
 
                     analisis_ia_id: {
+
                         bsonType:
                             "objectId"
                     },
@@ -2114,6 +2167,7 @@ const validatorPrediccionesSIR = {
                             true,
 
                         items: {
+
                             bsonType:
                                 "objectId"
                         }
@@ -2128,6 +2182,7 @@ const validatorPrediccionesSIR = {
                             true,
 
                         items: {
+
                             bsonType:
                                 "objectId"
                         }
@@ -2169,6 +2224,7 @@ const validatorPrediccionesSIR = {
                     },
 
                     observaciones: {
+
                         bsonType:
                             "string"
                     }
@@ -2252,11 +2308,13 @@ const validatorPrediccionesSIR = {
             },
 
             registrado_por: {
+
                 bsonType:
                     "objectId"
             },
 
             created_at: {
+
                 bsonType:
                     "date"
             }
@@ -2266,41 +2324,13 @@ const validatorPrediccionesSIR = {
 
 
 // ============================================================
-// 11. VALIDADOR - ALERTAS
+// 10A. VALIDADOR - ALERTAS
 // ============================================================
 //
 // Colección histórica con ciclo de vida.
 //
-// Una alerta puede pasar:
-//
-//   activa = true
-//       ↓
-//   activa = false
-//
-// No se elimina como operación funcional ordinaria.
-//
-// nivel_riesgo:
-//   verde
-//   amarillo
-//   rojo
-//
-// tipo_alerta:
-//   catálogo funcional pendiente.
-//
-// fuente_datos:
-//   catálogo funcional pendiente.
-//
-// publica:
-//   marcador funcional de exposición.
-//   No sustituye autorización Backend.
-//
-// datos_origen puede referenciar:
-//
-//   condiciones_sanitarias
-//   casos_enfermedades
-//   predicciones_sir
-//
-// analisis_ia_id NO forma parte todavía del contrato aprobado.
+// Una alerta puede pasar de activa=true a activa=false
+// conservando el documento histórico.
 //
 // ============================================================
 
@@ -2318,6 +2348,7 @@ const validatorAlertas = {
             false,
 
         required: [
+
             "albergue_id",
             "fecha_alerta",
             "nivel_riesgo",
@@ -2333,20 +2364,40 @@ const validatorAlertas = {
 
         properties: {
 
+            // =================================================
+            // IDENTIFICACIÓN
+            // =================================================
+
             _id: {
+
                 bsonType:
                     "objectId"
             },
+
 
             albergue_id: {
+
                 bsonType:
-                    "objectId"
+                    "objectId",
+
+                description:
+                    "Referencia lógica hacia albergues._id"
             },
 
+
+            // =================================================
+            // EVENTO
+            // =================================================
+
             fecha_alerta: {
+
                 bsonType:
-                    "date"
+                    "date",
+
+                description:
+                    "Momento funcional en el que fue generada la alerta"
             },
+
 
             nivel_riesgo: {
 
@@ -2354,11 +2405,16 @@ const validatorAlertas = {
                     "string",
 
                 enum: [
+
                     "verde",
                     "amarillo",
                     "rojo"
-                ]
+                ],
+
+                description:
+                    "Nivel de riesgo asociado a la alerta"
             },
+
 
             tipo_alerta: {
 
@@ -2366,8 +2422,12 @@ const validatorAlertas = {
                     "string",
 
                 minLength:
-                    1
+                    1,
+
+                description:
+                    "Tipo funcional de alerta. Catálogo oficial pendiente."
             },
+
 
             mensaje: {
 
@@ -2375,18 +2435,48 @@ const validatorAlertas = {
                     "string",
 
                 minLength:
-                    1
+                    1,
+
+                description:
+                    "Descripción legible de la alerta"
             },
+
+
+            // =================================================
+            // CICLO DE VIDA
+            // =================================================
 
             activa: {
+
                 bsonType:
-                    "bool"
+                    "bool",
+
+                description:
+                    "Indica si la alerta permanece vigente"
             },
 
+
             publica: {
+
                 bsonType:
-                    "bool"
+                    "bool",
+
+                description:
+                    "Marcador funcional que indica si la alerta puede ser expuesta públicamente"
             },
+
+
+            // =================================================
+            // DATOS DE ORIGEN
+            // =================================================
+            //
+            // El objeto es obligatorio para mantener una estructura
+            // estable.
+            //
+            // Sus referencias internas son opcionales porque dependen
+            // del tipo de evento que originó la alerta.
+            //
+            // =================================================
 
             datos_origen: {
 
@@ -2399,9 +2489,14 @@ const validatorAlertas = {
                 properties: {
 
                     condicion_sanitaria_id: {
+
                         bsonType:
-                            "objectId"
+                            "objectId",
+
+                        description:
+                            "Referencia opcional hacia condiciones_sanitarias._id"
                     },
+
 
                     casos_enfermedades_ids: {
 
@@ -2412,17 +2507,31 @@ const validatorAlertas = {
                             true,
 
                         items: {
+
                             bsonType:
                                 "objectId"
-                        }
+                        },
+
+                        description:
+                            "Referencias opcionales hacia casos_enfermedades._id"
                     },
 
+
                     prediccion_sir_id: {
+
                         bsonType:
-                            "objectId"
+                            "objectId",
+
+                        description:
+                            "Referencia opcional hacia predicciones_sir._id"
                     }
                 }
             },
+
+
+            // =================================================
+            // TRAZABILIDAD
+            // =================================================
 
             fuente_datos: {
 
@@ -2430,27 +2539,50 @@ const validatorAlertas = {
                     "string",
 
                 minLength:
-                    1
+                    1,
+
+                description:
+                    "Origen funcional del evento. Catálogo oficial pendiente."
             },
+
 
             registrado_por: {
+
                 bsonType:
-                    "objectId"
+                    "objectId",
+
+                description:
+                    "Referencia lógica hacia usuarios._id"
             },
+
 
             created_at: {
+
                 bsonType:
-                    "date"
+                    "date",
+
+                description:
+                    "Fecha técnica de creación del documento"
             },
+
 
             updated_at: {
+
                 bsonType:
-                    "date"
+                    "date",
+
+                description:
+                    "Fecha técnica de última actualización"
             },
 
+
             updated_by: {
+
                 bsonType:
-                    "objectId"
+                    "objectId",
+
+                description:
+                    "Usuario responsable de la última actualización"
             }
         }
     }
@@ -2458,7 +2590,7 @@ const validatorAlertas = {
 
 
 // ============================================================
-// 12. FUNCIÓN IDEMPOTENTE
+// 11. FUNCIÓN IDEMPOTENTE
 // ============================================================
 
 function crearOActualizarColeccion(
@@ -2536,7 +2668,7 @@ function crearOActualizarColeccion(
 
 
 // ============================================================
-// 13. CREAR / ACTUALIZAR COLECCIONES
+// 12. CREAR / ACTUALIZAR COLECCIONES
 // ============================================================
 
 crearOActualizarColeccion(
@@ -2606,7 +2738,7 @@ crearOActualizarColeccion(
 
 
 // ============================================================
-// 14. SCHEMA MIGRATIONS
+// 13. SCHEMA MIGRATIONS
 // ============================================================
 
 if (
@@ -2635,7 +2767,7 @@ if (
 
 
 // ============================================================
-// 15. ÍNDICES
+// 14. ÍNDICES
 // ============================================================
 
 print("");
@@ -2648,10 +2780,12 @@ print("Configurando índices...");
 
 db.usuarios.createIndex(
     {
+
         email:
             1
     },
     {
+
         name:
             "ux_usuarios_email",
 
@@ -2668,10 +2802,12 @@ print(
 
 db.usuarios.createIndex(
     {
+
         albergue_id:
             1
     },
     {
+
         name:
             "ix_usuarios_albergue_id"
     }
@@ -2689,10 +2825,12 @@ print(
 
 db.albergues.createIndex(
     {
+
         codigo_albergue:
             1
     },
     {
+
         name:
             "ux_albergues_codigo_albergue",
 
@@ -2714,6 +2852,7 @@ print(
 
 db.registros_diarios.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2721,6 +2860,7 @@ db.registros_diarios.createIndex(
             -1
     },
     {
+
         name:
             "ux_registros_diarios_albergue_fecha",
 
@@ -2742,6 +2882,7 @@ print(
 
 db.historial_poblacion.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2749,6 +2890,7 @@ db.historial_poblacion.createIndex(
             -1
     },
     {
+
         name:
             "ux_historial_poblacion_albergue_fecha",
 
@@ -2770,6 +2912,7 @@ print(
 
 db.condiciones_sanitarias.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2777,6 +2920,7 @@ db.condiciones_sanitarias.createIndex(
             -1
     },
     {
+
         name:
             "ix_condiciones_sanitarias_albergue_fecha"
     }
@@ -2795,6 +2939,7 @@ print(
 
 db.casos_enfermedades.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2802,6 +2947,7 @@ db.casos_enfermedades.createIndex(
             -1
     },
     {
+
         name:
             "ix_casos_enfermedades_albergue_fecha"
     }
@@ -2816,6 +2962,7 @@ print(
 
 db.casos_enfermedades.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2826,6 +2973,7 @@ db.casos_enfermedades.createIndex(
             -1
     },
     {
+
         name:
             "ix_casos_enfermedades_albergue_enfermedad_fecha"
     }
@@ -2844,6 +2992,7 @@ print(
 
 db.intervenciones.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2851,6 +3000,7 @@ db.intervenciones.createIndex(
             -1
     },
     {
+
         name:
             "ix_intervenciones_albergue_fecha"
     }
@@ -2865,6 +3015,7 @@ print(
 
 db.intervenciones.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2875,6 +3026,7 @@ db.intervenciones.createIndex(
             -1
     },
     {
+
         name:
             "ix_intervenciones_albergue_tipo_fecha"
     }
@@ -2893,6 +3045,7 @@ print(
 
 db.metricas_albergue.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2900,6 +3053,7 @@ db.metricas_albergue.createIndex(
             1
     },
     {
+
         name:
             "ux_metricas_albergue_albergue_fecha_bucket",
 
@@ -2918,9 +3072,15 @@ print(
 // ------------------------------------------------------------
 // analisis_ia
 // ------------------------------------------------------------
+//
+// Histórico.
+//
+// Ninguno de estos índices debe ser UNIQUE.
+// ------------------------------------------------------------
 
 db.analisis_ia.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2928,6 +3088,7 @@ db.analisis_ia.createIndex(
             -1
     },
     {
+
         name:
             "ix_analisis_ia_albergue_fecha"
     }
@@ -2942,6 +3103,7 @@ print(
 
 db.analisis_ia.createIndex(
     {
+
         "modelo.nombre":
             1,
 
@@ -2952,6 +3114,7 @@ db.analisis_ia.createIndex(
             -1
     },
     {
+
         name:
             "ix_analisis_ia_modelo_version_fecha"
     }
@@ -2967,9 +3130,15 @@ print(
 // ------------------------------------------------------------
 // predicciones_sir
 // ------------------------------------------------------------
+//
+// Histórico.
+//
+// Ninguno de los índices SIR debe ser UNIQUE.
+// ------------------------------------------------------------
 
 db.predicciones_sir.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -2977,6 +3146,7 @@ db.predicciones_sir.createIndex(
             -1
     },
     {
+
         name:
             "ix_predicciones_sir_albergue_fecha"
     }
@@ -2991,6 +3161,7 @@ print(
 
 db.predicciones_sir.createIndex(
     {
+
         albergue_id:
             1,
 
@@ -3001,6 +3172,7 @@ db.predicciones_sir.createIndex(
             -1
     },
     {
+
         name:
             "ix_predicciones_sir_albergue_enfermedad_fecha"
     }
@@ -3015,6 +3187,7 @@ print(
 
 db.predicciones_sir.createIndex(
     {
+
         "modelo.nombre":
             1,
 
@@ -3025,6 +3198,7 @@ db.predicciones_sir.createIndex(
             -1
     },
     {
+
         name:
             "ix_predicciones_sir_modelo_version_fecha"
     }
@@ -3042,19 +3216,37 @@ print(
 // ------------------------------------------------------------
 //
 // Histórico consultable.
+// Ninguno de estos índices debe ser UNIQUE.
+// ------------------------------------------------------------
+
+// ============================================================
+// 5. ÍNDICES
+// ============================================================
 //
-// Ninguno de los índices debe ser UNIQUE.
+// Ningún índice es UNIQUE.
+//
+// Una misma fecha puede contener múltiples alertas.
+//
+// ============================================================
+
+
+// ------------------------------------------------------------
+// 5.1 HISTÓRICO POR ALBERGUE
 // ------------------------------------------------------------
 
 db.alertas.createIndex(
+
     {
+
         albergue_id:
             1,
 
         fecha_alerta:
             -1
     },
+
     {
+
         name:
             "ix_alertas_albergue_fecha"
     }
@@ -3067,8 +3259,14 @@ print(
 );
 
 
+// ------------------------------------------------------------
+// 5.2 ALERTAS ACTIVAS POR ALBERGUE
+// ------------------------------------------------------------
+
 db.alertas.createIndex(
+
     {
+
         albergue_id:
             1,
 
@@ -3078,7 +3276,9 @@ db.alertas.createIndex(
         fecha_alerta:
             -1
     },
+
     {
+
         name:
             "ix_alertas_albergue_activa_fecha"
     }
@@ -3091,15 +3291,23 @@ print(
 );
 
 
+// ------------------------------------------------------------
+// 5.3 CONSULTA GLOBAL POR NIVEL
+// ------------------------------------------------------------
+
 db.alertas.createIndex(
+
     {
+
         nivel_riesgo:
             1,
 
         activa:
             1
     },
+
     {
+
         name:
             "ix_alertas_nivel_activa"
     }
@@ -3118,10 +3326,12 @@ print(
 
 db.schema_migrations.createIndex(
     {
+
         version:
             1
     },
     {
+
         name:
             "ux_schema_migrations_version",
 
@@ -3138,7 +3348,7 @@ print(
 
 
 // ============================================================
-// 16. RESULTADO
+// 15. RESULTADO
 // ============================================================
 
 print("");
@@ -3219,16 +3429,6 @@ print(
 
 print(
     "✓ Trazabilidad de origen de alertas disponible"
-);
-
-
-print(
-    "✓ metricas_albergue preparado para referenciar alertas activas"
-);
-
-
-print(
-    "✓ estados_semaforo continúa pendiente"
 );
 
 
