@@ -8,6 +8,7 @@
 //   - usuarios
 //   - albergues
 //   - registros_diarios
+//   - historial_poblacion
 //   - condiciones_sanitarias
 //   - casos_enfermedades
 //   - intervenciones
@@ -28,6 +29,13 @@
 //
 // Las migraciones versionadas representan la evolución
 // histórica de ambientes existentes.
+//
+// historial_poblacion fue incorporada mediante la migración:
+//
+//   010_create_historial_poblacion
+//
+// El backfill desde registros_diarios pertenece exclusivamente
+// a la migración 010 y NO se ejecuta desde este init.
 // ============================================================
 
 db = db.getSiblingDB("semaforo_vital");
@@ -560,7 +568,109 @@ const validatorRegistrosDiarios = {
 
 
 // ============================================================
-// 4. VALIDADOR - CONDICIONES SANITARIAS
+// 4. VALIDADOR - HISTORIAL POBLACION
+// ============================================================
+//
+// Fuente persistente oficial de población diaria.
+//
+// Regla:
+//
+//   1 albergue + 1 fecha
+//   =
+//   1 registro de población.
+//
+// Esta colección fue incorporada mediante:
+//
+//   010_create_historial_poblacion.js
+//
+// registros_diarios.poblacion se conserva por compatibilidad
+// con el consolidado diario existente.
+//
+// Los nuevos flujos de consulta y registro de población
+// utilizan historial_poblacion.
+//
+// ============================================================
+
+const validatorHistorialPoblacion = {
+
+    $jsonSchema: {
+
+        bsonType:
+            "object",
+
+        title:
+            "Esquema de validación de historial de población",
+
+        additionalProperties:
+            false,
+
+        required: [
+            "albergue_id",
+            "fecha",
+            "poblacion",
+            "registrado_por",
+            "created_at"
+        ],
+
+        properties: {
+
+            _id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            albergue_id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            fecha: {
+
+                bsonType:
+                    "date"
+            },
+
+            poblacion: {
+
+                bsonType:
+                    "int",
+
+                minimum:
+                    0
+            },
+
+            registrado_por: {
+
+                bsonType:
+                    "objectId"
+            },
+
+            created_at: {
+
+                bsonType:
+                    "date"
+            },
+
+            updated_at: {
+
+                bsonType:
+                    "date"
+            },
+
+            updated_by: {
+
+                bsonType:
+                    "objectId"
+            }
+        }
+    }
+};
+
+
+// ============================================================
+// 5. VALIDADOR - CONDICIONES SANITARIAS
 // ============================================================
 
 const validatorCondicionesSanitarias = {
@@ -732,7 +842,7 @@ const validatorCondicionesSanitarias = {
 
 
 // ============================================================
-// 5. VALIDADOR - CASOS DE ENFERMEDADES
+// 6. VALIDADOR - CASOS DE ENFERMEDADES
 // ============================================================
 
 const validatorCasosEnfermedades = {
@@ -840,7 +950,7 @@ const validatorCasosEnfermedades = {
 
 
 // ============================================================
-// 6. VALIDADOR - INTERVENCIONES
+// 7. VALIDADOR - INTERVENCIONES
 // ============================================================
 
 const validatorIntervenciones = {
@@ -948,7 +1058,7 @@ const validatorIntervenciones = {
 
 
 // ============================================================
-// 7. VALIDADOR - METRICAS ALBERGUE
+// 8. VALIDADOR - METRICAS ALBERGUE
 // ============================================================
 
 const validatorMetricasAlbergue = {
@@ -1419,7 +1529,7 @@ const validatorMetricasAlbergue = {
 
 
 // ============================================================
-// 8. VALIDADOR - ANALISIS IA
+// 9. VALIDADOR - ANALISIS IA
 // ============================================================
 //
 // Colección histórica.
@@ -1777,7 +1887,7 @@ const validatorAnalisisIA = {
 
 
 // ============================================================
-// 9. FUNCIÓN IDEMPOTENTE
+// 10. FUNCIÓN IDEMPOTENTE
 // ============================================================
 
 function crearOActualizarColeccion(
@@ -1855,7 +1965,7 @@ function crearOActualizarColeccion(
 
 
 // ============================================================
-// 10. CREAR / ACTUALIZAR COLECCIONES
+// 11. CREAR / ACTUALIZAR COLECCIONES
 // ============================================================
 
 crearOActualizarColeccion(
@@ -1873,6 +1983,12 @@ crearOActualizarColeccion(
 crearOActualizarColeccion(
     "registros_diarios",
     validatorRegistrosDiarios
+);
+
+
+crearOActualizarColeccion(
+    "historial_poblacion",
+    validatorHistorialPoblacion
 );
 
 
@@ -1907,7 +2023,7 @@ crearOActualizarColeccion(
 
 
 // ============================================================
-// 11. SCHEMA MIGRATIONS
+// 12. SCHEMA MIGRATIONS
 // ============================================================
 
 if (
@@ -1936,7 +2052,7 @@ if (
 
 
 // ============================================================
-// 12. ÍNDICES
+// 13. ÍNDICES
 // ============================================================
 
 print("");
@@ -2034,6 +2150,41 @@ db.registros_diarios.createIndex(
 print(
     "✓ Índice creado/verificado: " +
     "ux_registros_diarios_albergue_fecha"
+);
+
+
+// ------------------------------------------------------------
+// historial_poblacion
+// ------------------------------------------------------------
+//
+// Un único registro de población por albergue y fecha.
+//
+// Debe coincidir con el índice creado por:
+//   010_create_historial_poblacion.js
+//
+// ------------------------------------------------------------
+
+db.historial_poblacion.createIndex(
+    {
+        albergue_id:
+            1,
+
+        fecha:
+            -1
+    },
+    {
+        name:
+            "ux_historial_poblacion_albergue_fecha",
+
+        unique:
+            true
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ux_historial_poblacion_albergue_fecha"
 );
 
 
@@ -2268,7 +2419,7 @@ print(
 
 
 // ============================================================
-// 13. RESULTADO
+// 14. RESULTADO
 // ============================================================
 
 print("");
@@ -2286,6 +2437,10 @@ print(
 
 print(
     "✓ Índices vigentes"
+);
+
+print(
+    "✓ historial_poblacion disponible como fuente de población diaria"
 );
 
 print(
