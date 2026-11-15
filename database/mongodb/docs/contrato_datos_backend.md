@@ -29,6 +29,8 @@ Su objetivo es evitar inconsistencias durante la integración entre base de dato
 - alertas sanitarias y epidemiológicas;
 - estados históricos del Semáforo Vital;
 - relación entre histórico y snapshot actual;
+- escenarios hipotéticos e intervenciones simuladas;
+- relación de escenarios con IA y SIR;
 - evolución futura del esquema.
 
 La base de datos utilizada es:
@@ -56,6 +58,7 @@ analisis_ia
 predicciones_sir
 alertas
 estados_semaforo
+escenarios
 schema_migrations
 ```
 
@@ -78,6 +81,8 @@ schema_migrations
 | simulaciones epidemiológicas | `predicciones_sir` |
 | alertas sanitarias | `alertas` |
 | estado oficial/histórico del Semáforo Vital | `estados_semaforo` |
+| escenario hipotético | `escenarios` |
+| intervención simulada | `escenarios.intervenciones_simuladas` |
 
 Los nombres implementados forman parte del contrato y no deben modificarse unilateralmente.
 
@@ -416,10 +421,20 @@ acciones hipotéticas
 intervenciones propuestas
 ```
 
-Las acciones simuladas corresponderán posteriormente a:
+Las acciones simuladas corresponden a:
 
 ```text
-escenarios
+escenarios.intervenciones_simuladas
+```
+
+La separación vigente es:
+
+```text
+intervenciones
+    → acciones reales ejecutadas
+
+escenarios.intervenciones_simuladas
+    → acciones hipotéticas
 ```
 
 ---
@@ -526,6 +541,15 @@ created_at
 ```
 
 La probabilidad IA no equivale directamente al estado del Semáforo Vital.
+
+`escenario_id` es opcional. Desde la migración 014, cuando está presente, referencia un escenario hipotético del mismo albergue:
+
+```text
+analisis_ia.escenario_id
+    → escenarios._id
+```
+
+Las ejecuciones sobre datos reales pueden continuar sin `escenario_id`.
 
 ---
 
@@ -943,12 +967,16 @@ Estas reglas corresponden a Backend o al componente matemático.
 
 Es opcional.
 
-Referencia futura:
+Desde la migración 014 es una referencia lógica vigente:
 
 ```text
 predicciones_sir.escenario_id
     → escenarios._id
 ```
+
+La ejecución sobre datos reales puede omitir `escenario_id`. Una ejecución hipotética puede asociarlo al escenario utilizado.
+
+Cuando está presente, `predicciones_sir.albergue_id` y `escenarios.albergue_id` deben ser coherentes.
 
 ---
 
@@ -958,9 +986,10 @@ predicciones_sir.escenario_id
 ix_predicciones_sir_albergue_fecha
 ix_predicciones_sir_albergue_enfermedad_fecha
 ix_predicciones_sir_modelo_version_fecha
+ix_predicciones_sir_escenario_fecha
 ```
 
-Los tres son no únicos.
+Los cuatro son no únicos.
 
 ---
 
@@ -1002,11 +1031,13 @@ Persiste el histórico de alertas sanitarias y epidemiológicas generadas para l
     mensaje: String,
     activa: Boolean,
     publica: Boolean,
+
     datos_origen: {
         condicion_sanitaria_id: ObjectId,
         casos_enfermedades_ids: [ObjectId],
         prediccion_sir_id: ObjectId
     },
+
     fuente_datos: String,
     registrado_por: ObjectId,
     created_at: Date,
@@ -1310,6 +1341,293 @@ No únicos.
 
 ---
 
+# 12C. Colección `escenarios`
+
+Fue incorporada mediante:
+
+```text
+014_create_escenarios.js
+```
+
+## 12C.1 Propósito
+
+Persiste escenarios hipotéticos asociados a un albergue para simular cambios en condiciones sanitarias e intervenciones sin alterar los datos reales.
+
+La separación funcional es:
+
+```text
+intervenciones
+    → acciones reales ejecutadas
+
+escenarios.intervenciones_simuladas
+    → acciones hipotéticas
+```
+
+Los resultados derivados continúan en sus colecciones especializadas:
+
+```text
+analisis_ia
+predicciones_sir
+```
+
+## 12C.2 Estructura
+
+```javascript
+{
+    _id: ObjectId,
+
+    albergue_id: ObjectId,
+
+    nombre: String,
+
+    descripcion: String,
+
+    datos_base: {
+        registros_diarios_ids: [ObjectId],
+        historial_poblacion_ids: [ObjectId],
+        condiciones_sanitarias_ids: [ObjectId],
+        casos_enfermedades_ids: [ObjectId],
+        metricas_albergue_ids: [ObjectId],
+        estados_semaforo_ids: [ObjectId]
+    },
+
+    condiciones_simuladas: {
+        agua_potable_disponible: Boolean,
+        banos_disponibles: Int32,
+        letrinas: Int32,
+        litros_agua: Number,
+        estado_higiene: String,
+        estado_saneamiento: String,
+
+        otros_recursos_sanitarios: [
+            {
+                nombre: String,
+                cantidad: Int32,
+                observacion: String
+            }
+        ]
+    },
+
+    intervenciones_simuladas: [
+        {
+            tipo_intervencion: String,
+            descripcion: String,
+            observaciones: String
+        }
+    ],
+
+    registrado_por: ObjectId,
+
+    created_at: Date
+}
+```
+
+## 12C.3 Campos obligatorios
+
+Son obligatorios:
+
+```text
+albergue_id
+nombre
+datos_base
+condiciones_simuladas
+intervenciones_simuladas
+registrado_por
+created_at
+```
+
+`descripcion` es opcional.
+
+Dentro de `datos_base` son obligatorios los seis arrays:
+
+```text
+registros_diarios_ids
+historial_poblacion_ids
+condiciones_sanitarias_ids
+casos_enfermedades_ids
+metricas_albergue_ids
+estados_semaforo_ids
+```
+
+Los arrays pueden estar vacíos y utilizan:
+
+```text
+uniqueItems: true
+```
+
+## 12C.4 Condiciones simuladas
+
+Son obligatorios:
+
+```text
+agua_potable_disponible
+banos_disponibles
+estado_higiene
+estado_saneamiento
+otros_recursos_sanitarios
+```
+
+Son opcionales:
+
+```text
+letrinas
+litros_agua
+```
+
+Reglas estructurales:
+
+```text
+banos_disponibles >= 0
+letrinas >= 0, cuando exista
+litros_agua >= 0, cuando exista
+otros_recursos_sanitarios[].cantidad >= 0
+```
+
+No se definen enums artificiales para:
+
+```text
+estado_higiene
+estado_saneamiento
+```
+
+porque sus catálogos funcionales permanecen pendientes.
+
+## 12C.5 Intervenciones simuladas
+
+`intervenciones_simuladas` es un array obligatorio que puede estar vacío.
+
+Cada elemento requiere:
+
+```text
+tipo_intervencion
+descripcion
+```
+
+`observaciones` es opcional.
+
+`tipo_intervencion` continúa como `String` abierto hasta que exista catálogo funcional aprobado.
+
+Una intervención simulada no crea ni modifica documentos en la colección `intervenciones`.
+
+## 12C.6 Datos base y trazabilidad
+
+Relaciones:
+
+```text
+escenarios.datos_base.registros_diarios_ids[]
+    → registros_diarios._id
+
+escenarios.datos_base.historial_poblacion_ids[]
+    → historial_poblacion._id
+
+escenarios.datos_base.condiciones_sanitarias_ids[]
+    → condiciones_sanitarias._id
+
+escenarios.datos_base.casos_enfermedades_ids[]
+    → casos_enfermedades._id
+
+escenarios.datos_base.metricas_albergue_ids[]
+    → metricas_albergue._id
+
+escenarios.datos_base.estados_semaforo_ids[]
+    → estados_semaforo._id
+```
+
+Cuando una referencia está presente, debe existir y pertenecer al mismo `albergue_id` del escenario.
+
+## 12C.7 Relación con IA y SIR
+
+Desde la migración 014 son relaciones lógicas vigentes:
+
+```text
+analisis_ia.escenario_id
+    → escenarios._id
+
+predicciones_sir.escenario_id
+    → escenarios._id
+```
+
+`escenario_id` permanece opcional en ambas colecciones.
+
+Regla conceptual:
+
+```text
+ejecución real
+    → escenario_id ausente
+
+ejecución hipotética
+    → escenario_id presente
+```
+
+Cuando está presente, el escenario y el resultado analítico deben pertenecer al mismo albergue.
+
+## 12C.8 Naturaleza histórica
+
+`escenarios` se trata como colección histórica / append-only.
+
+No utiliza:
+
+```text
+updated_at
+updated_by
+```
+
+La razón es preservar reproducibilidad: una ejecución IA o SIR que referencia un escenario debe conservar la hipótesis exacta utilizada.
+
+Una nueva hipótesis debe generar un nuevo documento.
+
+## 12C.9 Resultados no embebidos
+
+`escenarios` no almacena resultados analíticos como:
+
+```text
+probabilidad_riesgo
+beta
+gamma
+trayectoria SIR
+nivel del Semáforo resultante
+ranking de intervención
+prioridad calculada
+```
+
+Estos resultados pertenecen a los componentes y colecciones especializadas.
+
+## 12C.10 Reglas no impuestas por DBA
+
+MongoDB no determina:
+
+```text
+cómo cambia beta ante una intervención
+cómo cambia gamma
+cómo afecta higiene al riesgo
+cómo afecta agua potable al riesgo
+qué intervención reduce más el riesgo
+qué escenario debe priorizarse
+qué nivel de Semáforo resultaría
+cómo comparar gráficas
+```
+
+Estas reglas corresponden a Backend y a los componentes analíticos cuando exista definición funcional aprobada.
+
+## 12C.11 Índices
+
+```text
+ix_escenarios_albergue_created_at
+```
+
+No único.
+
+Además, para recuperar resultados por escenario:
+
+```text
+ix_analisis_ia_escenario_fecha
+ix_predicciones_sir_escenario_fecha
+```
+
+No únicos.
+
+---
+
 # 13. Migración 011
 
 Archivo:
@@ -1449,6 +1767,84 @@ schema_migrations
 
 ---
 
+# 14E. Migración 014
+
+Archivo:
+
+```text
+database/mongodb/migrations/014_create_escenarios.js
+```
+
+Dependencia:
+
+```text
+013_create_estados_semaforo
+```
+
+Colecciones requeridas:
+
+```text
+usuarios
+albergues
+registros_diarios
+historial_poblacion
+condiciones_sanitarias
+casos_enfermedades
+metricas_albergue
+analisis_ia
+predicciones_sir
+estados_semaforo
+schema_migrations
+```
+
+La migración:
+
+- crea o actualiza `escenarios`;
+- aplica `$jsonSchema`;
+- configura validación `strict`;
+- configura `validationAction: error`;
+- crea el índice de escenarios por albergue y fecha de creación;
+- crea índices de `analisis_ia` y `predicciones_sir` por `escenario_id`;
+- valida `albergue_id`;
+- valida `registrado_por`;
+- valida referencias de los seis arrays de `datos_base`;
+- verifica coherencia de albergue;
+- activa el control referencial lógico de `analisis_ia.escenario_id`;
+- activa el control referencial lógico de `predicciones_sir.escenario_id`;
+- registra la migración;
+- verifica registro único;
+- verifica índices.
+
+---
+
+# 14F. Idempotencia de migración 014
+
+Si la colección ya existe utiliza:
+
+```text
+collMod
+```
+
+No ejecuta:
+
+```text
+drop
+```
+
+La migración queda aplicada cuando existe exactamente un documento:
+
+```text
+version = 014_create_escenarios
+```
+
+en:
+
+```text
+schema_migrations
+```
+
+---
+
 # 15. Inicialización reproducible
 
 Archivo:
@@ -1472,6 +1868,7 @@ analisis_ia
 predicciones_sir
 alertas
 estados_semaforo
+escenarios
 schema_migrations
 ```
 
@@ -1495,6 +1892,7 @@ Reproduce también los índices de:
 predicciones_sir
 alertas
 estados_semaforo
+escenarios
 ```
 
 ---
@@ -1558,6 +1956,52 @@ validationLevel strict
 validationAction error
 ausencia deliberada de prioridad
 ausencia deliberada de fórmulas de clasificación
+```
+
+---
+
+# 16C. Pruebas DBA de escenarios
+
+Archivo:
+
+```text
+database/mongodb/tests/test_escenarios.js
+```
+
+Resultado:
+
+```text
+Pruebas exitosas: 69
+Pruebas fallidas: 0
+```
+
+Cobertura principal:
+
+```text
+documento válido
+campos obligatorios
+tipos BSON
+datos_base obligatorio
+seis arrays obligatorios
+uniqueItems
+condiciones_simuladas
+letrinas opcionales
+litros_agua opcionales
+otros recursos sanitarios
+intervenciones_simuladas
+separación entre intervenciones reales y simuladas
+additionalProperties false
+naturaleza histórica append-only
+ausencia de updated_at
+ausencia de updated_by
+referencias huérfanas
+coherencia de albergue
+integración analisis_ia.escenario_id
+integración predicciones_sir.escenario_id
+índices no únicos
+migración registrada
+validationLevel strict
+validationAction error
 ```
 
 ---
@@ -1680,6 +2124,36 @@ estados_semaforo.datos_origen.metricas_albergue_ids[]
 
 metricas_albergue.estado_actual.semaforo_vital.estado_semaforo_id
     → estados_semaforo._id
+
+escenarios.albergue_id
+    → albergues._id
+
+escenarios.registrado_por
+    → usuarios._id
+
+escenarios.datos_base.registros_diarios_ids[]
+    → registros_diarios._id
+
+escenarios.datos_base.historial_poblacion_ids[]
+    → historial_poblacion._id
+
+escenarios.datos_base.condiciones_sanitarias_ids[]
+    → condiciones_sanitarias._id
+
+escenarios.datos_base.casos_enfermedades_ids[]
+    → casos_enfermedades._id
+
+escenarios.datos_base.metricas_albergue_ids[]
+    → metricas_albergue._id
+
+escenarios.datos_base.estados_semaforo_ids[]
+    → estados_semaforo._id
+
+analisis_ia.escenario_id
+    → escenarios._id
+
+predicciones_sir.escenario_id
+    → escenarios._id
 ```
 
 MongoDB `$jsonSchema` no implementa foreign keys.
@@ -1688,7 +2162,7 @@ Los controles DBA utilizan `$lookup`.
 
 ---
 
-# 18. Referencias lógicas y futuras
+# 18. Referencias lógicas vigentes
 
 Relación vigente:
 
@@ -1704,7 +2178,7 @@ metricas_albergue.estado_actual.semaforo_vital.estado_semaforo_id
     → estados_semaforo._id
 ```
 
-Referencias futuras:
+Relaciones vigentes desde la migración 014:
 
 ```text
 analisis_ia.escenario_id
@@ -1713,6 +2187,8 @@ analisis_ia.escenario_id
 predicciones_sir.escenario_id
     → escenarios._id
 ```
+
+Ambas referencias son opcionales y se utilizan para distinguir ejecuciones hipotéticas de ejecuciones sobre datos reales.
 
 ---
 
@@ -1766,14 +2242,21 @@ registrado_por
 created_at
 ```
 
-`analisis_ia`, `predicciones_sir` y `estados_semaforo` son históricos append-only.
+`escenarios` utiliza:
+
+```text
+registrado_por
+created_at
+```
+
+`analisis_ia`, `predicciones_sir`, `estados_semaforo` y `escenarios` son históricos append-only.
 
 ---
 
 # 20. Resultados de pruebas
 
 ```text
-test_validaciones.js                8/8
+test_validaciones.js                 8/8
 test_integridad_qa.js              12/12
 test_condiciones_sanitarias.js     14/14
 test_casos_enfermedades.js         14/14
@@ -1784,6 +2267,7 @@ test_historial_poblacion.js        18/18
 test_predicciones_sir.js           35/35
 test_alertas.js                    40/40
 test_estados_semaforo.js           50/50
+test_escenarios.js                 69/69
 ```
 
 ---
@@ -1846,6 +2330,7 @@ ux_metricas_albergue_albergue_fecha_bucket
 ```text
 ix_analisis_ia_albergue_fecha
 ix_analisis_ia_modelo_version_fecha
+ix_analisis_ia_escenario_fecha
 ```
 
 ## `predicciones_sir`
@@ -1854,6 +2339,7 @@ ix_analisis_ia_modelo_version_fecha
 ix_predicciones_sir_albergue_fecha
 ix_predicciones_sir_albergue_enfermedad_fecha
 ix_predicciones_sir_modelo_version_fecha
+ix_predicciones_sir_escenario_fecha
 ```
 
 ## `alertas`
@@ -1873,6 +2359,14 @@ ix_estados_semaforo_nivel_fecha
 ```
 
 No únicos.
+
+## `escenarios`
+
+```text
+ix_escenarios_albergue_created_at
+```
+
+No único.
 
 ## `schema_migrations`
 
@@ -1906,6 +2400,10 @@ La capa DBA garantiza:
 - contrato histórico de estados del Semáforo Vital;
 - trazabilidad de fuentes utilizadas por cada estado;
 - relación estructural entre histórico y snapshot actual;
+- contrato estructural de escenarios hipotéticos;
+- separación entre intervenciones reales y simuladas;
+- trazabilidad de datos base utilizados por escenarios;
+- coherencia de `escenario_id` con IA y SIR;
 - versionado de modelos;
 - trazabilidad de datos fuente;
 - parámetros SIR estructuralmente válidos;
@@ -1918,6 +2416,7 @@ DBA no implementa:
 algoritmo SIR
 reglas funcionales de generación de alertas
 clasificación final del Semáforo Vital
+priorización funcional de intervenciones simuladas
 autorización de usuarios
 ```
 
@@ -1940,7 +2439,10 @@ Backend deberá garantizar:
 - registrar preprocesamiento;
 - manejar errores MongoDB;
 - controlar acceso asociado a `publica`;
-- mantener separación entre ejecución real y escenarios futuros;
+- mantener separación entre ejecuciones reales y escenarios hipotéticos;
+- crear nuevos escenarios sin sobrescribir hipótesis históricas;
+- garantizar que las fuentes de `datos_base` pertenezcan al albergue del escenario;
+- asociar `escenario_id` a IA/SIR únicamente cuando corresponda a una simulación hipotética;
 - generar alertas según reglas funcionales aprobadas;
 - validar coherencia de los datos de origen de alertas;
 - cerrar alertas sin eliminar histórico;
@@ -2037,7 +2539,34 @@ caché temporal
 
 ---
 
-# 28. Redis
+# 27A. Relación con escenarios
+
+Arquitectura vigente:
+
+```text
+datos reales
+    │
+    ├──────────────┐
+    │              │
+    ▼              ▼
+MongoDB        escenarios
+                  │
+                  ├── condiciones_simuladas
+                  │
+                  └── intervenciones_simuladas
+                            │
+               ┌────────────┴────────────┐
+               ▼                         ▼
+         analisis_ia              predicciones_sir
+```
+
+`escenarios` conserva la hipótesis.
+
+`analisis_ia` y `predicciones_sir` conservan los resultados de las ejecuciones asociadas mediante `escenario_id`.
+
+La comparación y priorización de escenarios corresponde a Backend y componentes analíticos; MongoDB conserva el contrato y la trazabilidad.
+
+---
 
 # 28. Redis
 
@@ -2340,10 +2869,18 @@ Por lo tanto:
 no existe migración Redis
 ```
 
-y el siguiente número MongoDB continúa disponible como:
+En el Checkpoint 10, el número `014` quedó disponible porque Redis no requirió cambios estructurales en MongoDB.
+
+Posteriormente, el Checkpoint 11 utilizó ese número para:
 
 ```text
-014
+014_create_escenarios.js
+```
+
+El siguiente número disponible pasa a ser:
+
+```text
+015
 ```
 
 ---
@@ -2371,6 +2908,8 @@ secretos
 
 `estados_semaforo` almacena estados agregados y referencias documentales.
 
+`escenarios` almacena hipótesis sanitarias agregadas y referencias documentales; no debe contener datos individualizados de pacientes.
+
 ---
 
 # 30. Migraciones vigentes
@@ -2389,6 +2928,7 @@ secretos
 011_create_predicciones_sir.js
 012_create_alertas.js
 013_create_estados_semaforo.js
+014_create_escenarios.js
 ```
 
 Las migraciones aplicadas no deben modificarse retroactivamente.
@@ -2443,6 +2983,7 @@ analisis_ia                     ✓
 predicciones_sir                ✓
 alertas                         ✓
 estados_semaforo                ✓
+escenarios                      ✓
 schema_migrations               ✓
 ```
 
@@ -2462,6 +3003,7 @@ Migraciones:
 011_create_predicciones_sir               ✓
 012_create_alertas                        ✓
 013_create_estados_semaforo               ✓
+014_create_escenarios                      ✓
 ```
 
 Pruebas:
@@ -2476,6 +3018,7 @@ historial_poblacion        18/18
 predicciones_sir           35/35
 alertas                    40/40
 estados_semaforo           50/50
+escenarios                  69/69
 ```
 
 El Checkpoint 9 deja formalmente implementado:
@@ -2529,6 +3072,39 @@ Pruebas específicas                                27/27
 Nueva migración MongoDB                    no requerida
 ```
 
+El Checkpoint 11 deja formalmente implementado:
+
+```text
+Colección escenarios                                  ✓
+Migración 014                                         ✓
+Dependencia de migración 013                          ✓
+Validator strict                                      ✓
+additionalProperties false                            ✓
+Naturaleza histórica append-only                      ✓
+datos_base obligatorio                                ✓
+seis arrays de trazabilidad                           ✓
+uniqueItems en referencias                            ✓
+condiciones_simuladas                                 ✓
+agua potable hipotética                               ✓
+baños hipotéticos                                     ✓
+letrinas opcionales                                   ✓
+litros de agua opcionales                             ✓
+higiene y saneamiento simulados                       ✓
+otros recursos sanitarios                             ✓
+intervenciones_simuladas                              ✓
+intervenciones reales y simuladas separadas           ✓
+analisis_ia.escenario_id integrado                    ✓
+predicciones_sir.escenario_id integrado               ✓
+coherencia de albergue                                ✓
+referencias huérfanas controladas                     ✓
+índice escenarios por albergue                        ✓
+índice IA por escenario                               ✓
+índice SIR por escenario                              ✓
+Init reproducible                                     ✓
+Pruebas DBA                                         69/69
+Documentación                                         ✓
+```
+
 El contrato actual queda:
 
 ```text
@@ -2537,12 +3113,12 @@ MongoDB
 
 Redis
     → optimización temporal de lectura
-```
 
-El próximo número de migración permanece:
+escenarios
+    → hipótesis persistentes y trazables
 
-```text
-014
+analisis_ia / predicciones_sir
+    → resultados analíticos asociados opcionalmente mediante escenario_id
 ```
 
 Reglas matemáticas pendientes:
@@ -2556,10 +3132,21 @@ método numérico oficial
 coherencia de fuentes con enfermedad y albergue
 ```
 
+Decisiones funcionales pendientes relacionadas con escenarios:
+
+```text
+catálogo oficial de estado_higiene
+catálogo oficial de estado_saneamiento
+catálogo oficial de tipo_intervencion
+fórmulas para impacto de intervenciones
+reglas de comparación de escenarios
+reglas de priorización de intervenciones
+```
+
 El próximo número de migración disponible es:
 
 ```text
-014
+015
 ```
 
 siempre que `main` no reciba otra migración antes del siguiente checkpoint.
