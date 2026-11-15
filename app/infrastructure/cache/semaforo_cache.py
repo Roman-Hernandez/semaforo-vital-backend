@@ -13,6 +13,7 @@ from app.infrastructure.cache.redis import (
 )
 from app.infrastructure.cache.semaforo_snapshot import (
     SemaforoEstadoCache,
+    UltimaMedicionInput,
     build_semaforo_snapshot,
 )
 
@@ -132,11 +133,7 @@ def get_semaforo_snapshot(
     porcentaje_ocupacion = None
     alertas_activas = None
 
-    ultima_medicion_fecha = None
-    ultima_medicion_ph = None
-    ultima_medicion_cloro_residual = None
-    ultima_medicion_personas_alojadas = None
-    ultima_medicion_porcentaje_ocupacion = None
+    ultima_medicion_cache: UltimaMedicionInput | None = None
 
     ultima_actualizacion = None
 
@@ -206,39 +203,33 @@ def get_semaforo_snapshot(
 
         if ultima_medicion:
 
-            ultima_medicion_fecha = (
-                ultima_medicion.get(
-                    "fecha_hora"
-                )
-            )
-
-            ultima_medicion_ph = _number(
-                ultima_medicion.get(
-                    "ph"
-                )
-            )
-
-            ultima_medicion_cloro_residual = (
-                _number(
+            ultima_medicion_cache = {
+                "fecha_hora": (
+                    ultima_medicion.get(
+                        "fecha_hora"
+                    )
+                ),
+                "ph": _number(
+                    ultima_medicion.get(
+                        "ph"
+                    )
+                ),
+                "cloro_residual": _number(
                     ultima_medicion.get(
                         "cloro_residual"
                     )
-                )
-            )
-
-            ultima_medicion_personas_alojadas = (
-                ultima_medicion.get(
-                    "personas_alojadas"
-                )
-            )
-
-            ultima_medicion_porcentaje_ocupacion = (
-                _number(
+                ),
+                "personas_alojadas": (
+                    ultima_medicion.get(
+                        "personas_alojadas"
+                    )
+                ),
+                "porcentaje_ocupacion": _number(
                     ultima_medicion.get(
                         "porcentaje_ocupacion"
                     )
-                )
-            )
+                ),
+            }
 
         ultima_actualizacion = (
             metricas.get(
@@ -262,17 +253,7 @@ def get_semaforo_snapshot(
         fecha_calculo=fecha_calculo,
         porcentaje_ocupacion=porcentaje_ocupacion,
         alertas_activas=alertas_activas,
-        ultima_medicion_fecha=ultima_medicion_fecha,
-        ultima_medicion_ph=ultima_medicion_ph,
-        ultima_medicion_cloro_residual=(
-            ultima_medicion_cloro_residual
-        ),
-        ultima_medicion_personas_alojadas=(
-            ultima_medicion_personas_alojadas
-        ),
-        ultima_medicion_porcentaje_ocupacion=(
-            ultima_medicion_porcentaje_ocupacion
-        ),
+        ultima_medicion=ultima_medicion_cache,
         ultima_actualizacion=ultima_actualizacion,
     )
 

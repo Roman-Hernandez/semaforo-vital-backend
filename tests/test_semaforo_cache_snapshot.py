@@ -43,11 +43,13 @@ def test_build_complete_semaforo_snapshot() -> None:
         fecha_calculo=fecha_calculo,
         porcentaje_ocupacion=82.5,
         alertas_activas=2,
-        ultima_medicion_fecha=fecha_medicion,
-        ultima_medicion_ph=7.1,
-        ultima_medicion_cloro_residual=0.5,
-        ultima_medicion_personas_alojadas=165,
-        ultima_medicion_porcentaje_ocupacion=82.5,
+        ultima_medicion={
+            "fecha_hora": fecha_medicion,
+            "ph": 7.1,
+            "cloro_residual": 0.5,
+            "personas_alojadas": 165,
+            "porcentaje_ocupacion": 82.5,
+        },
         ultima_actualizacion=ultima_actualizacion,
     )
 
@@ -88,11 +90,7 @@ def test_snapshot_accepts_missing_semaforo() -> None:
         fecha_calculo=None,
         porcentaje_ocupacion=None,
         alertas_activas=None,
-        ultima_medicion_fecha=None,
-        ultima_medicion_ph=None,
-        ultima_medicion_cloro_residual=None,
-        ultima_medicion_personas_alojadas=None,
-        ultima_medicion_porcentaje_ocupacion=None,
+        ultima_medicion=None,
         ultima_actualizacion=None,
     )
 
@@ -138,11 +136,13 @@ def test_snapshot_preserves_zero_values() -> None:
         fecha_calculo=None,
         porcentaje_ocupacion=0.0,
         alertas_activas=0,
-        ultima_medicion_fecha=None,
-        ultima_medicion_ph=0.0,
-        ultima_medicion_cloro_residual=0.0,
-        ultima_medicion_personas_alojadas=0,
-        ultima_medicion_porcentaje_ocupacion=0.0,
+        ultima_medicion={
+            "fecha_hora": None,
+            "ph": 0.0,
+            "cloro_residual": 0.0,
+            "personas_alojadas": 0,
+            "porcentaje_ocupacion": 0.0,
+        },
         ultima_actualizacion=None,
     )
 
