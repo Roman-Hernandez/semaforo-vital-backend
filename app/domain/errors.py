@@ -57,5 +57,17 @@ class DuplicateShelterCode(ApplicationError):
     pass
 
 
+class DuplicateDailyRecord(ApplicationError):
+    pass
+
+
+class InvalidDailyRecord(ApplicationError):
+    pass
+
+
+class DailyRecordNotFound(ApplicationError):
+    pass
+
+
 class ShelterInactive(ApplicationError):
     pass

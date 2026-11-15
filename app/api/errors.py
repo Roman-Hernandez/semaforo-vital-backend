@@ -10,10 +10,13 @@ from starlette.exceptions import HTTPException
 
 from app.domain.errors import (
     ApplicationError,
+    DailyRecordNotFound,
+    DuplicateDailyRecord,
     DuplicateShelterCode,
     InactiveUser,
     InsufficientPermissions,
     InvalidCredentials,
+    InvalidDailyRecord,
     InvalidPopulation,
     InvalidShelterData,
     InvalidTokenError,
@@ -55,6 +58,9 @@ ERROR_CATALOG = {
     InsufficientPermissions: ErrorDefinition(403, "INSUFFICIENT_PERMISSIONS", "Permisos insuficientes"),
     ShelterAccessDenied: ErrorDefinition(403, "SHELTER_ACCESS_DENIED", "Se requiere un administrador con albergue asignado"),
     ShelterNotFound: ErrorDefinition(404, "SHELTER_NOT_FOUND", "Albergue no encontrado"),
+    DailyRecordNotFound: ErrorDefinition(404, "DAILY_RECORD_NOT_FOUND", "Registro diario no encontrado"),
+    DuplicateDailyRecord: ErrorDefinition(409, "DAILY_RECORD_DUPLICATE", "Ya existe un registro diario para ese albergue y fecha"),
+    InvalidDailyRecord: ErrorDefinition(422, "INVALID_DAILY_RECORD", "Datos del registro diario inválidos"),
     DuplicateShelterCode: ErrorDefinition(409, "SHELTER_CODE_DUPLICATE", "Ya existe un albergue con ese código"),
     ShelterInactive: ErrorDefinition(409, "SHELTER_INACTIVE", "El albergue está desactivado y no puede modificarse"),
     PopulationConflict: ErrorDefinition(409, "POPULATION_CONFLICT", "Conflicto al registrar población; vuelva a intentar"),
