@@ -14,9 +14,8 @@ from app.infrastructure.database.mongodb import mongodb_lifespan
 
 @asynccontextmanager
 async def application_lifespan(app: FastAPI):
-    async with mongodb_lifespan(app):
-        async with redis_lifespan(app):
-            yield
+    async with mongodb_lifespan(app), redis_lifespan(app):
+        yield
 
 
 app = FastAPI(

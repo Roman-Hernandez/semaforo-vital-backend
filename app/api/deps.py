@@ -3,10 +3,7 @@ from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Depends, Request
-from fastapi.security import (
-    HTTPAuthorizationCredentials,
-    HTTPBearer,
-)
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pymongo.database import Database
 from redis import Redis
 
@@ -17,23 +14,11 @@ from app.application.auth import (
 )
 from app.application.shelters import ShelterService
 from app.core.config import settings
-from app.domain.errors import (
-    InsufficientPermissions,
-    NotAuthenticated,
-)
-from app.domain.ports.user_repository import (
-    UserRepository,
-)
-from app.domain.users import (
-    User,
-    UserRole,
-)
-from app.infrastructure.cache.redis import (
-    get_redis_from_request,
-)
-from app.infrastructure.database.mongodb import (
-    get_database_from_request,
-)
+from app.domain.errors import InsufficientPermissions, NotAuthenticated
+from app.domain.ports.user_repository import UserRepository
+from app.domain.users import User, UserRole
+from app.infrastructure.cache.redis import get_redis_from_request
+from app.infrastructure.database.mongodb import get_database_from_request
 from app.infrastructure.repositories.cached_shelter_repository import (
     CachedShelterRepository,
 )
@@ -43,11 +28,7 @@ from app.infrastructure.repositories.mongo_shelter_repository import (
 from app.infrastructure.repositories.mongo_user_repository import (
     MongoUserRepository,
 )
-from app.infrastructure.security.tokens import (
-    JwtTokens,
-    verify_password,
-)
-
+from app.infrastructure.security.tokens import JwtTokens, verify_password
 
 http_bearer = HTTPBearer(
     auto_error=False
