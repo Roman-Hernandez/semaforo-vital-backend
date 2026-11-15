@@ -2039,31 +2039,39 @@ caché temporal
 
 # 28. Redis
 
+# 28. Redis
+
+Redis forma parte de la arquitectura vigente como caché temporal del estado actual del Semáforo Vital.
+
 MongoDB continúa siendo:
 
 ```text
 fuente persistente de verdad
 ```
 
-Redis será:
+Redis es:
 
 ```text
-caché temporal
+caché temporal de lectura
 ```
 
-Clave prevista:
+La relación vigente es:
 
 ```text
-semaforo:estado:{albergue_id}
+estados_semaforo
+    ↓
+histórico oficial
+
+metricas_albergue.estado_actual
+    ↓
+snapshot persistente
+
+Redis
+    ↓
+snapshot temporal
 ```
 
-TTL:
-
-```text
-900 segundos
-```
-
-Redis no reemplazará:
+Redis no reemplaza:
 
 ```text
 historial_poblacion
@@ -2072,6 +2080,270 @@ analisis_ia
 predicciones_sir
 alertas
 estados_semaforo
+```
+
+## 28.1 Key
+
+Contrato:
+
+```text
+semaforo:estado:{albergue_id}
+```
+
+Configuración:
+
+```env
+REDIS_KEY_PREFIX=semaforo:estado
+```
+
+## 28.2 TTL
+
+TTL vigente:
+
+```text
+900 segundos
+```
+
+Configuración:
+
+```env
+REDIS_TTL_SECONDS=900
+```
+
+## 28.3 Payload
+
+El snapshot Redis contiene:
+
+```text
+albergue_id
+nombre
+nivel_semaforo
+codigo_semaforo
+estado_semaforo_id
+fecha_calculo
+porcentaje_ocupacion
+alertas_activas
+ultima_medicion
+ultima_actualizacion
+```
+
+`ultima_medicion` contiene:
+
+```text
+fecha_hora
+ph
+cloro_residual
+personas_alojadas
+porcentaje_ocupacion
+```
+
+Las fechas se serializan mediante:
+
+```text
+ISO 8601
+```
+
+Los campos sin información disponible pueden representarse mediante:
+
+```text
+null
+```
+
+## 28.4 Lectura
+
+Flujo:
+
+```text
+Backend
+    ↓
+Redis GET
+    │
+    ├── HIT
+    │     ↓
+    │   respuesta
+    │
+    └── MISS
+          ↓
+       MongoDB
+          ↓
+    construir snapshot
+          ↓
+       Redis SETEX
+          ↓
+       respuesta
+```
+
+## 28.5 Fallback
+
+Redis debe considerarse una dependencia no crítica.
+
+Ante:
+
+```text
+Redis no configurado
+Redis no disponible
+error de lectura
+error de escritura
+contenido JSON inválido
+```
+
+el Backend debe continuar utilizando MongoDB.
+
+No debe producirse pérdida de disponibilidad funcional únicamente por indisponibilidad de Redis.
+
+## 28.6 Invalidación
+
+La invalidación utiliza:
+
+```text
+DEL semaforo:estado:{albergue_id}
+```
+
+Después de invalidar:
+
+```text
+siguiente lectura
+    ↓
+MongoDB
+    ↓
+nuevo snapshot
+    ↓
+Redis
+```
+
+## 28.7 Separación de responsabilidades
+
+La implementación utiliza:
+
+```text
+CachedShelterRepository
+```
+
+como decorador de:
+
+```text
+ShelterRepository
+```
+
+Por tanto:
+
+```text
+Domain
+    → no conoce Redis
+
+Application
+    → no conoce Redis
+
+Infrastructure
+    → implementa cache Redis
+```
+
+`ShelterService` continúa dependiendo del contrato `ShelterRepository`.
+
+## 28.8 Redis y MongoDB
+
+Redis no debe utilizarse para:
+
+```text
+persistencia histórica
+auditoría
+reconstrucción definitiva de información
+fuente oficial del Semáforo Vital
+historial de alertas
+historial SIR
+historial IA
+```
+
+La información definitiva debe poder reconstruirse desde MongoDB aunque Redis se encuentre vacío o indisponible.
+
+## 28.9 Infraestructura
+
+Servicio Docker:
+
+```text
+redis:7.4-alpine
+```
+
+Puerto:
+
+```text
+6379
+```
+
+Healthcheck:
+
+```text
+redis-cli ping
+```
+
+Persistencia Redis:
+
+```text
+deshabilitada
+```
+
+La decisión es coherente con su función exclusivamente temporal.
+
+## 28.10 Configuración
+
+Entorno local:
+
+```env
+REDIS_URL=redis://localhost:6379/0
+REDIS_TTL_SECONDS=900
+REDIS_KEY_PREFIX=semaforo:estado
+```
+
+Docker:
+
+```text
+REDIS_URL=redis://redis:6379/0
+```
+
+## 28.11 Pruebas específicas
+
+```text
+test_redis_cache.py                  13/13
+test_redis_dependency.py              3/3
+test_semaforo_cache_snapshot.py       3/3
+test_semaforo_cache.py                8/8
+```
+
+Total:
+
+```text
+27/27
+```
+
+Se validan:
+
+```text
+HIT
+MISS
+TTL
+fallback
+serialización
+invalidación
+fallo Redis
+snapshot
+FastAPI dependency
+MongoDB como fuente de verdad
+```
+
+## 28.12 Migraciones
+
+Redis no modifica el esquema MongoDB.
+
+Por lo tanto:
+
+```text
+no existe migración Redis
+```
+
+y el siguiente número MongoDB continúa disponible como:
+
+```text
+014
 ```
 
 ---
@@ -2230,6 +2502,47 @@ usuario técnico automático pendiente                ✓
 Init reproducible                                   ✓
 Pruebas DBA                                       50/50
 Documentación                                       ✓
+```
+
+El Checkpoint 10 deja formalmente implementado:
+
+```text
+Redis como caché temporal                              ✓
+MongoDB como fuente persistente                        ✓
+Key semaforo:estado:{albergue_id}                     ✓
+TTL 900 segundos                                      ✓
+Snapshot de consulta                                  ✓
+estado_semaforo_id                                    ✓
+ultima_actualizacion                                  ✓
+Cache HIT                                             ✓
+Cache MISS                                            ✓
+Fallback a MongoDB                                    ✓
+Invalidación                                          ✓
+ISO 8601                                              ✓
+Redis sin persistencia obligatoria                    ✓
+Docker Compose                                        ✓
+Healthcheck                                           ✓
+CachedShelterRepository                               ✓
+Redis fuera del dominio                               ✓
+Redis fuera de Application                            ✓
+Pruebas específicas                                27/27
+Nueva migración MongoDB                    no requerida
+```
+
+El contrato actual queda:
+
+```text
+MongoDB
+    → persistencia definitiva
+
+Redis
+    → optimización temporal de lectura
+```
+
+El próximo número de migración permanece:
+
+```text
+014
 ```
 
 Reglas matemáticas pendientes:
