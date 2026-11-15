@@ -30,6 +30,7 @@ Actualmente se encuentran implementadas:
 usuarios
 albergues
 registros_diarios
+historial_poblacion
 condiciones_sanitarias
 casos_enfermedades
 intervenciones
@@ -59,7 +60,8 @@ database/
     │   ├── 006_create_casos_enfermedades.js
     │   ├── 007_create_intervenciones.js
     │   ├── 008_create_metricas_albergue.js
-    │   └── 009_create_analisis_ia.js
+    │   ├── 009_create_analisis_ia.js
+    │   └── 010_create_historial_poblacion.js
     │
     ├── seeds/
     │   ├── seed_admin.py
@@ -72,7 +74,8 @@ database/
     │   ├── test_casos_enfermedades.js
     │   ├── test_intervenciones.js
     │   ├── test_metricas_albergue.js
-    │   └── test_analisis_ia.js
+    │   ├── test_analisis_ia.js
+    │   └── test_historial_poblacion.js
     │
     ├── docs/
     │   ├── evidencias_US-08.md
@@ -107,6 +110,10 @@ Su responsabilidad es:
 La inicialización no reemplaza el mecanismo de migraciones.
 
 Las migraciones conservan la evolución histórica de ambientes existentes.
+
+`historial_poblacion` forma parte del estado estructural reproducible desde la incorporación de la migración 010.
+
+El `init` reproduce su colección, validador e índice, pero **no ejecuta el backfill histórico desde `registros_diarios`**. Esa transformación pertenece exclusivamente a la migración 010.
 
 ---
 
@@ -161,6 +168,7 @@ es legacy porque fue aplicada antes de existir `schema_migrations`.
 007_create_intervenciones.js
 008_create_metricas_albergue.js
 009_create_analisis_ia.js
+010_create_historial_poblacion.js
 ```
 
 Evolución conceptual:
@@ -193,7 +201,20 @@ Bucket Pattern + Computed Pattern
     ↓
 009
 Análisis IA histórico
+    ↓
+010
+Historial poblacional independiente
 ```
+
+La próxima migración DBA deberá utilizar el siguiente número disponible.
+
+Por tanto, la implementación futura de `predicciones_sir` deberá comenzar en:
+
+```text
+011_create_predicciones_sir.js
+```
+
+si no aparece una nueva migración integrada antes de su desarrollo.
 
 ---
 
@@ -354,7 +375,7 @@ ux_albergues_codigo_albergue
 
 # 10. Colección `registros_diarios`
 
-Representa el consolidado oficial diario de cada albergue.
+Representa el consolidado diario histórico de cada albergue.
 
 Estructura:
 
@@ -408,6 +429,197 @@ casos_ira
 representan casos nuevos durante el día.
 
 No representan casos activos ni acumulados.
+
+El campo:
+
+```text
+poblacion
+```
+
+se conserva dentro de esta colección por compatibilidad con el consolidado histórico existente.
+
+A partir de la migración 010, los nuevos flujos de registro, corrección y consulta de población deben utilizar:
+
+```text
+historial_poblacion
+```
+
+como fuente persistente principal de población diaria.
+
+---
+
+## 10.1 Colección `historial_poblacion`
+
+Incorporada mediante:
+
+```text
+010_create_historial_poblacion.js
+```
+
+Almacena el historial oficial de población diaria de cada albergue.
+
+Estructura:
+
+```javascript
+{
+    _id: ObjectId,
+
+    albergue_id: ObjectId,
+
+    fecha: Date,
+
+    poblacion: Int32,
+
+    registrado_por: ObjectId,
+
+    created_at: Date,
+
+    updated_at: Date,
+
+    updated_by: ObjectId
+}
+```
+
+Los campos obligatorios son:
+
+```text
+albergue_id
+fecha
+poblacion
+registrado_por
+created_at
+```
+
+Los campos:
+
+```text
+updated_at
+updated_by
+```
+
+son opcionales y se utilizan cuando el registro poblacional del mismo día es corregido.
+
+La regla estructural es:
+
+```text
+1 albergue + 1 fecha
+=
+1 registro de población
+```
+
+Índice:
+
+```text
+ux_historial_poblacion_albergue_fecha
+```
+
+Definición:
+
+```javascript
+{
+    albergue_id: 1,
+    fecha: -1
+}
+```
+
+Único.
+
+`poblacion` debe ser:
+
+```text
+Int32
+```
+
+y cumplir:
+
+```text
+poblacion >= 0
+```
+
+### Fuente oficial de población
+
+A partir de la migración 010:
+
+```text
+historial_poblacion
+```
+
+es la fuente persistente utilizada por los nuevos flujos para:
+
+```text
+población diaria
+población actual
+histórico poblacional
+porcentaje de ocupación diario
+cupos disponibles
+```
+
+El campo:
+
+```text
+registros_diarios.poblacion
+```
+
+se conserva porque forma parte del consolidado diario histórico existente.
+
+No debe utilizarse en nuevos desarrollos como sustituto de `historial_poblacion`.
+
+### Backfill de la migración 010
+
+La migración 010 copia los valores históricos existentes desde:
+
+```text
+registros_diarios.poblacion
+```
+
+hacia:
+
+```text
+historial_poblacion
+```
+
+conservando:
+
+```text
+albergue_id
+fecha
+poblacion
+registrado_por
+created_at
+updated_at
+updated_by
+```
+
+cuando estos últimos campos existan.
+
+El proceso utiliza:
+
+```text
+$setOnInsert
+```
+
+por lo que:
+
+- no modifica los documentos de `registros_diarios`;
+- no sobrescribe registros ya presentes en `historial_poblacion`;
+- puede ejecutarse de manera repetible dentro del comportamiento definido por la migración.
+
+### Separación con métricas intradía
+
+La arquitectura diferencia:
+
+```text
+historial_poblacion
+    → población oficial diaria
+
+metricas_albergue
+    → telemetría y ocupación intradía
+
+registros_diarios
+    → consolidado diario histórico
+```
+
+Por tanto, una medición intradía no debe sobrescribir el registro oficial de población diaria.
 
 ---
 
@@ -909,6 +1121,10 @@ Los arrays pueden estar vacíos.
 
 No se impone todavía una cantidad mínima de documentos de entrada porque no existe una regla funcional aprobada que la determine.
 
+La incorporación de `historial_poblacion` no modifica retroactivamente el contrato de `analisis_ia` definido en la migración 009.
+
+Si en el futuro el modelo IA requiere trazabilidad explícita hacia población independiente, deberá implementarse mediante una nueva migración y no modificando la 009.
+
 ---
 
 # 20. Preprocesamiento IA
@@ -1143,6 +1359,15 @@ registros_diarios.albergue_id
 registros_diarios.registrado_por
     → usuarios._id
 
+historial_poblacion.albergue_id
+    → albergues._id
+
+historial_poblacion.registrado_por
+    → usuarios._id
+
+historial_poblacion.updated_by
+    → usuarios._id
+
 condiciones_sanitarias.albergue_id
     → albergues._id
 
@@ -1189,6 +1414,14 @@ analisis_ia.datos_entrada.metricas_albergue_ids[]
 MongoDB `$jsonSchema` valida tipos BSON pero no implementa claves foráneas.
 
 Los controles DBA complementan esta limitación mediante `$lookup`.
+
+En `historial_poblacion`, la migración 010 no implementa controles `$lookup` dentro del propio script. La suite DBA específica verifica que las referencias huérfanas sean detectables para:
+
+```text
+albergue_id
+registrado_por
+updated_by
+```
 
 ---
 
@@ -1241,6 +1474,53 @@ test_metricas_albergue.js
 ```text
 test_analisis_ia.js
 20/20
+```
+
+## Historial poblacional
+
+```text
+test_historial_poblacion.js
+18/18
+```
+
+La suite de `historial_poblacion` valida:
+
+1. documento válido;
+2. `albergue_id` obligatorio;
+3. `fecha` obligatoria;
+4. `poblacion` obligatoria;
+5. `registrado_por` obligatorio;
+6. `created_at` obligatorio;
+7. población negativa rechazada;
+8. población `Double` rechazada;
+9. propiedades adicionales rechazadas;
+10. población cero permitida;
+11. `updated_at` y `updated_by` permitidos;
+12. múltiples fechas para el mismo albergue;
+13. duplicado albergue + fecha rechazado;
+14. índice único correcto;
+15. migración 010 registrada exactamente una vez;
+16. detección de `albergue_id` huérfano;
+17. detección de `registrado_por` huérfano;
+18. detección de `updated_by` huérfano.
+
+Resultado:
+
+```text
+Pruebas exitosas: 18
+Pruebas fallidas: 0
+```
+
+Las pruebas fueron repetidas después de ejecutar nuevamente:
+
+```text
+init_semaforo_vital.js
+```
+
+manteniendo:
+
+```text
+18/18
 ```
 
 ---
@@ -1316,6 +1596,23 @@ ux_albergues_codigo_albergue
 
 ```text
 ux_registros_diarios_albergue_fecha
+```
+
+Único.
+
+## `historial_poblacion`
+
+```text
+ux_historial_poblacion_albergue_fecha
+```
+
+Definición:
+
+```javascript
+{
+    albergue_id: 1,
+    fecha: -1
+}
 ```
 
 Único.
@@ -1422,6 +1719,24 @@ Las migraciones aplicadas no deben modificarse retroactivamente.
 
 Si una regla funcional aún no está definida, no debe convertirse unilateralmente en una restricción estructural.
 
+Cuando otro componente autorizado incorpore una migración nueva, el DBA debe:
+
+```text
+revisar el contrato
+    ↓
+validar impacto
+    ↓
+aplicar la migración
+    ↓
+alinear el init
+    ↓
+incorporar pruebas DBA
+    ↓
+actualizar documentación
+```
+
+sin reescribir retroactivamente la migración ya integrada.
+
 ---
 
 # 32. Estado actual
@@ -1432,6 +1747,7 @@ Colecciones:
 usuarios                        ✓
 albergues                       ✓
 registros_diarios               ✓
+historial_poblacion             ✓
 condiciones_sanitarias          ✓
 casos_enfermedades              ✓
 intervenciones                  ✓
@@ -1452,6 +1768,7 @@ Migraciones:
 007_create_intervenciones                 ✓
 008_create_metricas_albergue              ✓
 009_create_analisis_ia                    ✓
+010_create_historial_poblacion             ✓
 ```
 
 Pruebas específicas recientes:
@@ -1462,6 +1779,7 @@ casos_enfermedades         14/14
 intervenciones             15/15
 metricas_albergue          18/18
 analisis_ia                20/20
+historial_poblacion        18/18
 ```
 
 El estado estructural vigente se encuentra en:
@@ -1476,16 +1794,32 @@ La evolución histórica se encuentra en:
 database/mongodb/migrations/
 ```
 
-La colección:
+La arquitectura poblacional vigente es:
+
+```text
+historial_poblacion
+    → fuente persistente oficial de población diaria
+
+registros_diarios.poblacion
+    → dato histórico conservado en el consolidado diario
+
+metricas_albergue
+    → telemetría y ocupación intradía
+```
+
+Las colecciones:
 
 ```text
 analisis_ia
+historial_poblacion
 ```
 
-deja preparada la capa persistente para resultados analíticos reproducibles antes de avanzar hacia:
+dejan preparada la capa persistente antes de avanzar hacia:
 
 ```text
 predicciones_sir
 alertas
 estados_semaforo
 ```
+
+La próxima implementación de `predicciones_sir` deberá revisar `historial_poblacion` como fuente poblacional y utilizar el número de migración disponible después de la 010.
