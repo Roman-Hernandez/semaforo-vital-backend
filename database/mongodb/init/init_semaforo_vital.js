@@ -15,6 +15,7 @@
 //   - metricas_albergue
 //   - analisis_ia
 //   - predicciones_sir
+//   - alertas
 //   - schema_migrations
 //
 // Responsabilidad:
@@ -38,6 +39,10 @@
 // predicciones_sir fue incorporada mediante:
 //
 //   011_create_predicciones_sir
+//
+// alertas fue incorporada mediante:
+//
+//   012_create_alertas
 //
 // El backfill desde registros_diarios hacia historial_poblacion
 // pertenece exclusivamente a la migración 010.
@@ -2319,6 +2324,272 @@ const validatorPrediccionesSIR = {
 
 
 // ============================================================
+// 10A. VALIDADOR - ALERTAS
+// ============================================================
+//
+// Colección histórica con ciclo de vida.
+//
+// Una alerta puede pasar de activa=true a activa=false
+// conservando el documento histórico.
+//
+// ============================================================
+
+const validatorAlertas = {
+
+    $jsonSchema: {
+
+        bsonType:
+            "object",
+
+        title:
+            "Esquema de validación de alertas",
+
+        additionalProperties:
+            false,
+
+        required: [
+
+            "albergue_id",
+            "fecha_alerta",
+            "nivel_riesgo",
+            "tipo_alerta",
+            "mensaje",
+            "activa",
+            "publica",
+            "datos_origen",
+            "fuente_datos",
+            "registrado_por",
+            "created_at"
+        ],
+
+        properties: {
+
+            // =================================================
+            // IDENTIFICACIÓN
+            // =================================================
+
+            _id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+
+            albergue_id: {
+
+                bsonType:
+                    "objectId",
+
+                description:
+                    "Referencia lógica hacia albergues._id"
+            },
+
+
+            // =================================================
+            // EVENTO
+            // =================================================
+
+            fecha_alerta: {
+
+                bsonType:
+                    "date",
+
+                description:
+                    "Momento funcional en el que fue generada la alerta"
+            },
+
+
+            nivel_riesgo: {
+
+                bsonType:
+                    "string",
+
+                enum: [
+
+                    "verde",
+                    "amarillo",
+                    "rojo"
+                ],
+
+                description:
+                    "Nivel de riesgo asociado a la alerta"
+            },
+
+
+            tipo_alerta: {
+
+                bsonType:
+                    "string",
+
+                minLength:
+                    1,
+
+                description:
+                    "Tipo funcional de alerta. Catálogo oficial pendiente."
+            },
+
+
+            mensaje: {
+
+                bsonType:
+                    "string",
+
+                minLength:
+                    1,
+
+                description:
+                    "Descripción legible de la alerta"
+            },
+
+
+            // =================================================
+            // CICLO DE VIDA
+            // =================================================
+
+            activa: {
+
+                bsonType:
+                    "bool",
+
+                description:
+                    "Indica si la alerta permanece vigente"
+            },
+
+
+            publica: {
+
+                bsonType:
+                    "bool",
+
+                description:
+                    "Marcador funcional que indica si la alerta puede ser expuesta públicamente"
+            },
+
+
+            // =================================================
+            // DATOS DE ORIGEN
+            // =================================================
+            //
+            // El objeto es obligatorio para mantener una estructura
+            // estable.
+            //
+            // Sus referencias internas son opcionales porque dependen
+            // del tipo de evento que originó la alerta.
+            //
+            // =================================================
+
+            datos_origen: {
+
+                bsonType:
+                    "object",
+
+                additionalProperties:
+                    false,
+
+                properties: {
+
+                    condicion_sanitaria_id: {
+
+                        bsonType:
+                            "objectId",
+
+                        description:
+                            "Referencia opcional hacia condiciones_sanitarias._id"
+                    },
+
+
+                    casos_enfermedades_ids: {
+
+                        bsonType:
+                            "array",
+
+                        uniqueItems:
+                            true,
+
+                        items: {
+
+                            bsonType:
+                                "objectId"
+                        },
+
+                        description:
+                            "Referencias opcionales hacia casos_enfermedades._id"
+                    },
+
+
+                    prediccion_sir_id: {
+
+                        bsonType:
+                            "objectId",
+
+                        description:
+                            "Referencia opcional hacia predicciones_sir._id"
+                    }
+                }
+            },
+
+
+            // =================================================
+            // TRAZABILIDAD
+            // =================================================
+
+            fuente_datos: {
+
+                bsonType:
+                    "string",
+
+                minLength:
+                    1,
+
+                description:
+                    "Origen funcional del evento. Catálogo oficial pendiente."
+            },
+
+
+            registrado_por: {
+
+                bsonType:
+                    "objectId",
+
+                description:
+                    "Referencia lógica hacia usuarios._id"
+            },
+
+
+            created_at: {
+
+                bsonType:
+                    "date",
+
+                description:
+                    "Fecha técnica de creación del documento"
+            },
+
+
+            updated_at: {
+
+                bsonType:
+                    "date",
+
+                description:
+                    "Fecha técnica de última actualización"
+            },
+
+
+            updated_by: {
+
+                bsonType:
+                    "objectId",
+
+                description:
+                    "Usuario responsable de la última actualización"
+            }
+        }
+    }
+};
+
+
+// ============================================================
 // 11. FUNCIÓN IDEMPOTENTE
 // ============================================================
 
@@ -2457,6 +2728,12 @@ crearOActualizarColeccion(
 crearOActualizarColeccion(
     "predicciones_sir",
     validatorPrediccionesSIR
+);
+
+
+crearOActualizarColeccion(
+    "alertas",
+    validatorAlertas
 );
 
 
@@ -2935,6 +3212,115 @@ print(
 
 
 // ------------------------------------------------------------
+// alertas
+// ------------------------------------------------------------
+//
+// Histórico consultable.
+// Ninguno de estos índices debe ser UNIQUE.
+// ------------------------------------------------------------
+
+// ============================================================
+// 5. ÍNDICES
+// ============================================================
+//
+// Ningún índice es UNIQUE.
+//
+// Una misma fecha puede contener múltiples alertas.
+//
+// ============================================================
+
+
+// ------------------------------------------------------------
+// 5.1 HISTÓRICO POR ALBERGUE
+// ------------------------------------------------------------
+
+db.alertas.createIndex(
+
+    {
+
+        albergue_id:
+            1,
+
+        fecha_alerta:
+            -1
+    },
+
+    {
+
+        name:
+            "ix_alertas_albergue_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_alertas_albergue_fecha"
+);
+
+
+// ------------------------------------------------------------
+// 5.2 ALERTAS ACTIVAS POR ALBERGUE
+// ------------------------------------------------------------
+
+db.alertas.createIndex(
+
+    {
+
+        albergue_id:
+            1,
+
+        activa:
+            1,
+
+        fecha_alerta:
+            -1
+    },
+
+    {
+
+        name:
+            "ix_alertas_albergue_activa_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_alertas_albergue_activa_fecha"
+);
+
+
+// ------------------------------------------------------------
+// 5.3 CONSULTA GLOBAL POR NIVEL
+// ------------------------------------------------------------
+
+db.alertas.createIndex(
+
+    {
+
+        nivel_riesgo:
+            1,
+
+        activa:
+            1
+    },
+
+    {
+
+        name:
+            "ix_alertas_nivel_activa"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_alertas_nivel_activa"
+);
+
+
+// ------------------------------------------------------------
 // schema_migrations
 // ------------------------------------------------------------
 
@@ -3023,6 +3409,26 @@ print(
 
 print(
     "✓ Trayectoria epidemiológica SIR disponible"
+);
+
+
+print(
+    "✓ alertas histórico disponible"
+);
+
+
+print(
+    "✓ Ciclo de vida activa/inactiva disponible"
+);
+
+
+print(
+    "✓ Visibilidad publica de alertas disponible"
+);
+
+
+print(
+    "✓ Trazabilidad de origen de alertas disponible"
 );
 
 

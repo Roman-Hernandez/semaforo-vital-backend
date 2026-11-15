@@ -26,6 +26,7 @@ Su objetivo es evitar inconsistencias durante la integración entre base de dato
 - trazabilidad de datos utilizados;
 - preprocesamiento;
 - trayectorias epidemiológicas;
+- alertas sanitarias y epidemiológicas;
 - evolución futura del esquema.
 
 La base de datos utilizada es:
@@ -51,6 +52,7 @@ intervenciones
 metricas_albergue
 analisis_ia
 predicciones_sir
+alertas
 schema_migrations
 ```
 
@@ -71,6 +73,7 @@ schema_migrations
 | población diaria oficial | `historial_poblacion` |
 | análisis de riesgo IA | `analisis_ia` |
 | simulaciones epidemiológicas | `predicciones_sir` |
+| alertas sanitarias | `alertas` |
 
 Los nombres implementados forman parte del contrato y no deben modificarse unilateralmente.
 
@@ -441,11 +444,17 @@ ultima_medicion
 estado_actual
 ```
 
-`estado_actual` continúa opcional hasta completar:
+`estado_actual` continúa opcional mientras se completa:
 
 ```text
-alertas
 estados_semaforo
+```
+
+Desde la migración 012 existe la colección destino para:
+
+```text
+metricas_albergue.estado_actual.alertas_activas.ids[]
+    → alertas._id
 ```
 
 Índice:
@@ -1191,6 +1200,230 @@ Dos simulaciones independientes pueden compartir esas características.
 
 ---
 
+# 12A. Colección `alertas`
+
+Fue incorporada mediante:
+
+```text
+012_create_alertas.js
+```
+
+## 12A.1 Propósito
+
+Persiste el histórico de alertas sanitarias y epidemiológicas generadas para los albergues.
+
+La colección conserva:
+
+```text
+albergue
+fecha funcional de la alerta
+nivel de riesgo
+tipo de alerta
+mensaje
+estado activa/inactiva
+visibilidad pública
+datos de origen
+trazabilidad de creación y actualización
+```
+
+## 12A.2 Estructura
+
+```javascript
+{
+    _id: ObjectId,
+
+    albergue_id: ObjectId,
+
+    fecha_alerta: Date,
+
+    nivel_riesgo: String,
+
+    tipo_alerta: String,
+
+    mensaje: String,
+
+    activa: Boolean,
+
+    publica: Boolean,
+
+    datos_origen: {
+        condicion_sanitaria_id: ObjectId,
+        casos_enfermedades_ids: [ObjectId],
+        prediccion_sir_id: ObjectId
+    },
+
+    fuente_datos: String,
+
+    registrado_por: ObjectId,
+
+    created_at: Date,
+
+    updated_at: Date,
+
+    updated_by: ObjectId
+}
+```
+
+## 12A.3 Campos obligatorios
+
+Son obligatorios:
+
+```text
+albergue_id
+fecha_alerta
+nivel_riesgo
+tipo_alerta
+mensaje
+activa
+publica
+datos_origen
+fuente_datos
+registrado_por
+created_at
+```
+
+Son opcionales:
+
+```text
+datos_origen.condicion_sanitaria_id
+datos_origen.casos_enfermedades_ids
+datos_origen.prediccion_sir_id
+updated_at
+updated_by
+```
+
+## 12A.4 Nivel de riesgo
+
+`nivel_riesgo` utiliza exclusivamente:
+
+```text
+verde
+amarillo
+rojo
+```
+
+El nivel asociado a una alerta no representa por sí mismo el historial oficial del Semáforo Vital.
+
+Ese historial corresponderá posteriormente a:
+
+```text
+estados_semaforo
+```
+
+## 12A.5 Ciclo de vida
+
+Las alertas conservan histórico.
+
+Una alerta puede evolucionar:
+
+```text
+activa = true
+        ↓
+activa = false
+```
+
+sin eliminarse.
+
+Por esa razón:
+
+```text
+updated_at
+updated_by
+```
+
+pueden utilizarse para registrar el cierre o una actualización válida de la alerta.
+
+## 12A.6 Visibilidad pública
+
+```text
+publica
+```
+
+es un marcador funcional.
+
+No constituye por sí mismo un mecanismo de autorización.
+
+La autorización continúa siendo responsabilidad de Backend.
+
+## 12A.7 Datos de origen
+
+El objeto:
+
+```text
+datos_origen
+```
+
+es obligatorio para mantener una estructura documental estable.
+
+Sus referencias internas son opcionales.
+
+Relaciones aprobadas:
+
+```text
+alertas.datos_origen.condicion_sanitaria_id
+    → condiciones_sanitarias._id
+
+alertas.datos_origen.casos_enfermedades_ids[]
+    → casos_enfermedades._id
+
+alertas.datos_origen.prediccion_sir_id
+    → predicciones_sir._id
+```
+
+`casos_enfermedades_ids` utiliza:
+
+```text
+uniqueItems: true
+```
+
+Cuando una referencia existe debe pertenecer al mismo albergue indicado por:
+
+```text
+alertas.albergue_id
+```
+
+`$jsonSchema` valida estructura y tipos BSON.
+
+La coherencia referencial se controla mediante pruebas DBA y consultas `$lookup`, y debe ser validada también por Backend antes de persistir.
+
+## 12A.8 Catálogos pendientes
+
+Continúan como `String` abierto:
+
+```text
+tipo_alerta
+fuente_datos
+```
+
+No se inventan `enum` hasta contar con definición funcional aprobada.
+
+## 12A.9 Campos deliberadamente no incorporados
+
+No forman parte del contrato vigente:
+
+```text
+prioridad
+datos_origen.analisis_ia_id
+```
+
+No existe un catálogo funcional aprobado para prioridad.
+
+Tampoco existe todavía una definición aprobada para una referencia directa desde `alertas` hacia `analisis_ia`.
+
+## 12A.10 Índices
+
+```text
+ix_alertas_albergue_fecha
+ix_alertas_albergue_activa_fecha
+ix_alertas_nivel_activa
+```
+
+Los tres son no únicos.
+
+Esto permite conservar múltiples alertas históricas para un mismo albergue y fecha.
+
+---
+
 # 13. Migración 011
 
 Archivo:
@@ -1267,6 +1500,83 @@ schema_migrations
 
 ---
 
+# 14A. Migración 012
+
+Archivo:
+
+```text
+database/mongodb/migrations/012_create_alertas.js
+```
+
+Dependencia:
+
+```text
+011_create_predicciones_sir
+```
+
+La migración verifica que la 011 esté registrada exactamente una vez.
+
+Colecciones requeridas:
+
+```text
+usuarios
+albergues
+condiciones_sanitarias
+casos_enfermedades
+predicciones_sir
+schema_migrations
+```
+
+La migración:
+
+- crea o actualiza `alertas`;
+- aplica `$jsonSchema`;
+- configura validación `strict`;
+- configura `validationAction: error`;
+- crea tres índices históricos no únicos;
+- valida `albergue_id`;
+- valida `registrado_por`;
+- valida `updated_by` cuando existe;
+- valida referencias hacia `condiciones_sanitarias`;
+- valida referencias hacia `casos_enfermedades`;
+- valida referencias hacia `predicciones_sir`;
+- verifica coherencia de albergue para los datos de origen;
+- registra la migración;
+- verifica registro único;
+- verifica definiciones de índices.
+
+---
+
+# 14B. Idempotencia de migración 012
+
+Si la colección ya existe:
+
+```text
+collMod
+```
+
+actualiza el validator.
+
+No se ejecuta:
+
+```text
+drop
+```
+
+La migración queda aplicada cuando existe exactamente un documento con:
+
+```text
+version = 012_create_alertas
+```
+
+en:
+
+```text
+schema_migrations
+```
+
+---
+
 # 15. Inicialización reproducible
 
 El archivo:
@@ -1288,6 +1598,7 @@ intervenciones
 metricas_albergue
 analisis_ia
 predicciones_sir
+alertas
 schema_migrations
 ```
 
@@ -1303,7 +1614,7 @@ Para existentes:
 collMod
 ```
 
-También reproduce los tres índices de `predicciones_sir`.
+También reproduce los tres índices de `predicciones_sir` y los tres índices de `alertas`.
 
 El `init` no registra migraciones ni ejecuta transformaciones históricas.
 
@@ -1360,6 +1671,67 @@ la suite conservó:
 
 ```text
 35/35
+```
+
+---
+
+# 16A. Pruebas DBA de alertas
+
+Archivo:
+
+```text
+database/mongodb/tests/test_alertas.js
+```
+
+Resultado:
+
+```text
+Pruebas exitosas: 40
+Pruebas fallidas: 0
+```
+
+La suite cubre:
+
+```text
+documento válido
+campos obligatorios
+tipos BSON
+nivel_riesgo verde/amarillo/rojo
+tipo_alerta
+mensaje
+activa
+publica
+datos_origen
+fuente_datos
+additionalProperties
+uniqueItems
+trazabilidad de actualización
+cierre activa → inactiva
+alertas públicas
+condicion_sanitaria_id
+casos_enfermedades_ids
+prediccion_sir_id
+combinación de orígenes
+referencias huérfanas
+coherencia de albergue
+índices
+migración registrada
+múltiples alertas en la misma fecha
+ausencia deliberada de prioridad
+ausencia deliberada de analisis_ia_id
+catálogos abiertos
+```
+
+Después de ejecutar nuevamente:
+
+```text
+init_semaforo_vital.js
+```
+
+la suite conservó:
+
+```text
+40/40
 ```
 
 ---
@@ -1434,6 +1806,27 @@ predicciones_sir.datos_entrada.casos_enfermedades_ids[]
 
 predicciones_sir.datos_entrada.analisis_ia_id
     → analisis_ia._id
+
+alertas.albergue_id
+    → albergues._id
+
+alertas.registrado_por
+    → usuarios._id
+
+alertas.updated_by
+    → usuarios._id
+
+alertas.datos_origen.condicion_sanitaria_id
+    → condiciones_sanitarias._id
+
+alertas.datos_origen.casos_enfermedades_ids[]
+    → casos_enfermedades._id
+
+alertas.datos_origen.prediccion_sir_id
+    → predicciones_sir._id
+
+metricas_albergue.estado_actual.alertas_activas.ids[]
+    → alertas._id
 ```
 
 MongoDB `$jsonSchema` no implementa foreign keys.
@@ -1442,18 +1835,20 @@ Los controles DBA utilizan `$lookup`.
 
 ---
 
-# 18. Referencias futuras
+# 18. Referencias lógicas y futuras
 
-Actualmente:
-
-```text
-metricas_albergue.estado_actual.semaforo_vital.estado_semaforo_id
-    → estados_semaforo._id
-```
+Desde la migración 012 existe la colección destino para:
 
 ```text
 metricas_albergue.estado_actual.alertas_activas.ids[]
     → alertas._id
+```
+
+Continúan como referencias futuras:
+
+```text
+metricas_albergue.estado_actual.semaforo_vital.estado_semaforo_id
+    → estados_semaforo._id
 ```
 
 ```text
@@ -1466,7 +1861,7 @@ predicciones_sir.escenario_id
     → escenarios._id
 ```
 
-Estas referencias se endurecerán cuando existan las colecciones destino.
+Las referencias hacia `estados_semaforo` y `escenarios` se endurecerán cuando existan las colecciones destino.
 
 ---
 
@@ -1506,7 +1901,18 @@ registrado_por
 created_at
 ```
 
-Las dos últimas son históricas y no utilizan `updated_at` ni `updated_by`.
+`alertas` utiliza:
+
+```text
+registrado_por
+created_at
+updated_by
+updated_at
+```
+
+porque conserva histórico pero permite cambios de ciclo de vida, como el cierre de una alerta.
+
+`analisis_ia` y `predicciones_sir` son históricas append-only y no utilizan `updated_at` ni `updated_by`.
 
 ---
 
@@ -1522,6 +1928,7 @@ test_metricas_albergue.js          18/18
 test_analisis_ia.js                20/20
 test_historial_poblacion.js        18/18
 test_predicciones_sir.js           35/35
+test_alertas.js                    40/40
 ```
 
 ---
@@ -1610,6 +2017,16 @@ ix_predicciones_sir_modelo_version_fecha
 
 No únicos.
 
+## `alertas`
+
+```text
+ix_alertas_albergue_fecha
+ix_alertas_albergue_activa_fecha
+ix_alertas_nivel_activa
+```
+
+No únicos.
+
 ## `schema_migrations`
 
 ```text
@@ -1638,13 +2055,23 @@ La capa DBA garantiza:
 - Computed Pattern;
 - contrato de resultados IA;
 - contrato de resultados SIR;
+- contrato estructural de alertas;
+- ciclo de vida de alertas;
+- trazabilidad de datos de origen de alertas;
 - versionado de modelos;
 - trazabilidad de datos fuente;
 - parámetros SIR estructuralmente válidos;
 - trayectoria SIR estructuralmente válida;
 - pruebas DBA.
 
-DBA no implementa el algoritmo SIR.
+DBA no implementa:
+
+```text
+algoritmo SIR
+reglas funcionales de generación de alertas
+clasificación final del Semáforo Vital
+autorización de usuarios
+```
 
 ---
 
@@ -1665,7 +2092,11 @@ Backend deberá garantizar:
 - registrar preprocesamiento;
 - manejar errores MongoDB;
 - controlar acceso asociado a `publica`;
-- mantener separación entre ejecución real y escenarios futuros.
+- mantener separación entre ejecución real y escenarios futuros;
+- generar alertas según las reglas funcionales aprobadas;
+- validar coherencia de los datos de origen antes de persistir una alerta;
+- cerrar alertas sin eliminar su histórico;
+- controlar exposición pública de alertas mediante `publica`.
 
 ---
 
@@ -1723,24 +2154,35 @@ pero ambos resultados permanecen separados.
 
 ---
 
-# 26. Relación futura con alertas
+# 26. Relación con alertas
 
-La futura colección:
+La colección:
 
 ```text
 alertas
 ```
 
-podrá utilizar como fuentes:
+ya forma parte del modelo persistente.
+
+Sus fuentes documentales aprobadas actualmente son:
 
 ```text
-analisis_ia
+condiciones_sanitarias
+casos_enfermedades
 predicciones_sir
-metricas_albergue
-datos operativos
 ```
 
 Una simulación SIR no constituye por sí sola una alerta oficial.
+
+La generación de la alerta corresponde a la lógica funcional de Backend.
+
+Actualmente no existe una referencia directa:
+
+```text
+alertas → analisis_ia
+```
+
+porque esa relación no forma parte del contrato aprobado.
 
 ---
 
@@ -1757,11 +2199,12 @@ predicciones_sir
         ↓
 resultado epidemiológico
 
-alertas
+alertas ✓
         ↓
 alertas oficiales
 
 estados_semaforo
+    PENDIENTE
         ↓
 estado oficial/histórico
 
@@ -1834,6 +2277,8 @@ secretos
 
 `predicciones_sir` almacena cantidades epidemiológicas agregadas.
 
+`alertas` almacena eventos agregados del albergue y referencias documentales; no debe incorporar datos clínicos individualizados.
+
 ---
 
 # 30. Migraciones vigentes
@@ -1850,6 +2295,7 @@ secretos
 009_create_analisis_ia.js
 010_create_historial_poblacion.js
 011_create_predicciones_sir.js
+012_create_alertas.js
 ```
 
 Las migraciones aplicadas no deben modificarse retroactivamente.
@@ -1902,6 +2348,7 @@ intervenciones                  ✓
 metricas_albergue               ✓
 analisis_ia                     ✓
 predicciones_sir                ✓
+alertas                         ✓
 schema_migrations               ✓
 ```
 
@@ -1919,6 +2366,7 @@ Migraciones:
 009_create_analisis_ia                    ✓
 010_create_historial_poblacion            ✓
 011_create_predicciones_sir               ✓
+012_create_alertas                        ✓
 ```
 
 Pruebas:
@@ -1931,6 +2379,7 @@ metricas_albergue          18/18
 analisis_ia                20/20
 historial_poblacion        18/18
 predicciones_sir           35/35
+alertas                    40/40
 ```
 
 El Checkpoint 7 deja formalmente implementado:
@@ -1966,6 +2415,34 @@ Pruebas DBA                                        35/35
 Documentación                                       ✓
 ```
 
+El Checkpoint 8 deja formalmente implementado:
+
+```text
+Colección alertas                                  ✓
+Migración 012                                      ✓
+Dependencia de migración 011                       ✓
+Validator strict                                   ✓
+additionalProperties false                         ✓
+nivel_riesgo verde/amarillo/rojo                   ✓
+tipo_alerta abierto                                ✓
+mensaje                                            ✓
+activa/inactiva                                    ✓
+publica                                            ✓
+datos_origen                                       ✓
+condicion_sanitaria_id                             ✓
+casos_enfermedades_ids                             ✓
+prediccion_sir_id                                  ✓
+coherencia de albergue                             ✓
+registrado_por                                     ✓
+updated_by opcional                                ✓
+3 índices históricos no únicos                     ✓
+prioridad no incorporada sin definición            ✓
+analisis_ia_id no incorporado sin aprobación       ✓
+Init reproducible                                  ✓
+Pruebas DBA                                      40/40
+Documentación                                      ✓
+```
+
 Las reglas matemáticas deliberadamente pendientes son:
 
 ```text
@@ -1982,7 +2459,7 @@ Estas reglas no deben incorporarse estructuralmente hasta contar con definición
 El próximo número de migración disponible es:
 
 ```text
-012
+013
 ```
 
 siempre que `main` no reciba otra migración antes del siguiente checkpoint.
