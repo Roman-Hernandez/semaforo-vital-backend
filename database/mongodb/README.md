@@ -38,6 +38,7 @@ metricas_albergue
 analisis_ia
 predicciones_sir
 alertas
+estados_semaforo
 schema_migrations
 ```
 
@@ -65,7 +66,8 @@ database/
     │   ├── 009_create_analisis_ia.js
     │   ├── 010_create_historial_poblacion.js
     │   ├── 011_create_predicciones_sir.js
-    │   └── 012_create_alertas.js
+    │   ├── 012_create_alertas.js
+    │   └── 013_create_estados_semaforo.js
     │
     ├── seeds/
     │   ├── seed_admin.py
@@ -81,7 +83,8 @@ database/
     │   ├── test_analisis_ia.js
     │   ├── test_historial_poblacion.js
     │   ├── test_predicciones_sir.js
-    │   └── test_alertas.js
+    │   ├── test_alertas.js
+    │   └── test_estados_semaforo.js
     │
     ├── docs/
     │   ├── evidencias_US-08.md
@@ -131,6 +134,7 @@ metricas_albergue
 analisis_ia
 predicciones_sir
 alertas
+estados_semaforo
 schema_migrations
 ```
 
@@ -210,6 +214,7 @@ es legacy porque fue aplicada antes de existir `schema_migrations`.
 010_create_historial_poblacion.js
 011_create_predicciones_sir.js
 012_create_alertas.js
+013_create_estados_semaforo.js
 ```
 
 Evolución conceptual:
@@ -251,12 +256,15 @@ Predicciones epidemiológicas SIR
     ↓
 012
 Alertas sanitarias y epidemiológicas
+    ↓
+013
+Histórico oficial del Semáforo Vital
 ```
 
-Después de la migración 012, el siguiente número disponible es:
+Después de la migración 013, el siguiente número disponible es:
 
 ```text
-013
+014
 ```
 
 si no se integra previamente otra migración autorizada.
@@ -866,17 +874,28 @@ ux_metricas_albergue_albergue_fecha_bucket
 
 Único.
 
-`estado_actual` permanece opcional mientras se completa la implementación de:
+`estado_actual` permanece opcional porque un albergue puede no tener todavía un cálculo oficial materializado.
 
-```text
-estados_semaforo
-```
-
-Desde la migración 012 existe la colección destino para:
+Desde la migración 012 existe la relación:
 
 ```text
 metricas_albergue.estado_actual.alertas_activas.ids[]
     → alertas._id
+```
+
+Desde la migración 013 existe también:
+
+```text
+metricas_albergue.estado_actual.semaforo_vital.estado_semaforo_id
+    → estados_semaforo._id
+```
+
+`metricas_albergue.estado_actual.semaforo_vital` representa el snapshot persistente del último estado calculado.
+
+El histórico oficial permanece en:
+
+```text
+estados_semaforo
 ```
 
 ---
@@ -1445,7 +1464,7 @@ rojo
 
 El nivel asociado a una alerta no sustituye el historial oficial del Semáforo Vital.
 
-La fuente histórica oficial corresponderá a:
+La fuente histórica oficial corresponde a:
 
 ```text
 estados_semaforo
@@ -1560,6 +1579,153 @@ ix_alertas_nivel_activa
 Los tres índices son no únicos.
 
 La existencia de múltiples alertas para un mismo albergue y fecha es válida.
+
+---
+
+# 15C. Colección `estados_semaforo`
+
+Incorporada mediante:
+
+```text
+013_create_estados_semaforo.js
+```
+
+## Propósito
+
+Conserva el histórico oficial de los estados calculados del Semáforo Vital para cada albergue.
+
+La colección separa explícitamente:
+
+```text
+alertas
+    → histórico de alertas
+
+estados_semaforo
+    → histórico oficial del Semáforo Vital
+
+metricas_albergue.estado_actual
+    → snapshot persistente del último estado
+```
+
+Cada nuevo cálculo genera un documento nuevo.
+
+## Estructura
+
+```javascript
+{
+    _id: ObjectId,
+    albergue_id: ObjectId,
+    fecha_calculo: Date,
+    nivel: String,
+    codigo: Int32,
+    datos_origen: {
+        condiciones_sanitarias_ids: [ObjectId],
+        casos_enfermedades_ids: [ObjectId],
+        alertas_ids: [ObjectId],
+        analisis_ia_ids: [ObjectId],
+        predicciones_sir_ids: [ObjectId],
+        metricas_albergue_ids: [ObjectId]
+    },
+    registrado_por: ObjectId,
+    created_at: Date
+}
+```
+
+## Nivel
+
+`nivel` utiliza el catálogo cerrado:
+
+```text
+verde
+amarillo
+rojo
+```
+
+## Código
+
+`codigo` es `Int32`.
+
+No se impone todavía una equivalencia numérica oficial entre código y color.
+
+## Naturaleza histórica
+
+No forman parte del contrato:
+
+```text
+updated_at
+updated_by
+```
+
+Un nuevo cálculo inserta un nuevo documento.
+
+Los índices son no únicos.
+
+## Datos de origen
+
+Los seis arrays de `datos_origen` son obligatorios, utilizan `uniqueItems: true` y pueden estar vacíos:
+
+```text
+condiciones_sanitarias_ids
+casos_enfermedades_ids
+alertas_ids
+analisis_ia_ids
+predicciones_sir_ids
+metricas_albergue_ids
+```
+
+Relaciones:
+
+```text
+condiciones_sanitarias_ids[] → condiciones_sanitarias._id
+casos_enfermedades_ids[]     → casos_enfermedades._id
+alertas_ids[]                 → alertas._id
+analisis_ia_ids[]             → analisis_ia._id
+predicciones_sir_ids[]        → predicciones_sir._id
+metricas_albergue_ids[]       → metricas_albergue._id
+```
+
+Las fuentes deben corresponder al mismo albergue cuando la colección origen contiene `albergue_id`.
+
+## Snapshot actual
+
+```text
+estados_semaforo._id
+    ↓
+metricas_albergue.estado_actual.semaforo_vital.estado_semaforo_id
+```
+
+Backend deberá materializar:
+
+```javascript
+{
+    nivel: estado.nivel,
+    codigo: estado.codigo,
+    estado_semaforo_id: estado._id,
+    fecha_calculo: estado.fecha_calculo
+}
+```
+
+## Reglas no incorporadas en MongoDB
+
+MongoDB no determina umbrales, pesos ni fórmulas de clasificación del Semáforo Vital.
+
+Estas reglas corresponden a Backend y componentes analíticos.
+
+## Usuario técnico
+
+`registrado_por` es obligatorio.
+
+Los cálculos automáticos dependerán de la definición pendiente de un usuario técnico.
+
+## Índices
+
+```text
+ix_estados_semaforo_albergue_fecha
+ix_estados_semaforo_albergue_nivel_fecha
+ix_estados_semaforo_nivel_fecha
+```
+
+No únicos.
 
 ---
 
@@ -1748,6 +1914,33 @@ alertas.datos_origen.prediccion_sir_id
 
 metricas_albergue.estado_actual.alertas_activas.ids[]
     → alertas._id
+
+estados_semaforo.albergue_id
+    → albergues._id
+
+estados_semaforo.registrado_por
+    → usuarios._id
+
+estados_semaforo.datos_origen.condiciones_sanitarias_ids[]
+    → condiciones_sanitarias._id
+
+estados_semaforo.datos_origen.casos_enfermedades_ids[]
+    → casos_enfermedades._id
+
+estados_semaforo.datos_origen.alertas_ids[]
+    → alertas._id
+
+estados_semaforo.datos_origen.analisis_ia_ids[]
+    → analisis_ia._id
+
+estados_semaforo.datos_origen.predicciones_sir_ids[]
+    → predicciones_sir._id
+
+estados_semaforo.datos_origen.metricas_albergue_ids[]
+    → metricas_albergue._id
+
+metricas_albergue.estado_actual.semaforo_vital.estado_semaforo_id
+    → estados_semaforo._id
 ```
 
 MongoDB `$jsonSchema` valida tipos BSON pero no implementa claves foráneas.
@@ -1821,63 +2014,6 @@ test_predicciones_sir.js
 35/35
 ```
 
-La suite SIR valida:
-
-1. documento válido;
-2. `albergue_id` obligatorio;
-3. `fecha_ejecucion` obligatoria;
-4. `enfermedad` obligatoria;
-5. enfermedad no vacía;
-6. `publica` Boolean;
-7. beta no negativo;
-8. gamma no negativo;
-9. condiciones iniciales `Int32`;
-10. condiciones iniciales no negativas;
-11. `horizonte_dias >= 1`;
-12. método numérico no vacío;
-13. trayectoria no vacía;
-14. día no negativo;
-15. valores SIR no negativos;
-16. trayectoria admite decimales;
-17. referencias poblacionales sin duplicados;
-18. referencias de casos sin duplicados;
-19. propiedades adicionales rechazadas;
-20. `updated_at` rechazado;
-21. `escenario_id` opcional;
-22. `escenario_id` como ObjectId;
-23. `analisis_ia_id` opcional;
-24. `analisis_ia_id` como ObjectId;
-25. múltiples ejecuciones históricas permitidas;
-26. tres índices SIR correctos y no únicos;
-27. migración 011 registrada exactamente una vez;
-28. detección de `albergue_id` huérfano;
-29. detección de `registrado_por` huérfano;
-30. detección de referencia huérfana hacia `historial_poblacion`;
-31. detección de referencia huérfana hacia `casos_enfermedades`;
-32. detección de referencia huérfana hacia `analisis_ia`;
-33. observaciones de preprocesamiento opcionales;
-34. beta y gamma pueden superar 1;
-35. `$jsonSchema` no impone todavía `S + I + R = población`.
-
-Resultado:
-
-```text
-Pruebas exitosas: 35
-Pruebas fallidas: 0
-```
-
-La suite fue repetida después de ejecutar:
-
-```text
-init_semaforo_vital.js
-```
-
-manteniendo:
-
-```text
-35/35
-```
-
 ## Alertas
 
 ```text
@@ -1885,46 +2021,18 @@ test_alertas.js
 40/40
 ```
 
-La suite de alertas valida:
+## Estados del Semáforo Vital
 
-1. documento válido;
-2. campos obligatorios;
-3. catálogo `verde / amarillo / rojo`;
-4. `tipo_alerta` y `mensaje`;
-5. `activa` y `publica`;
-6. `datos_origen`;
-7. `fuente_datos`;
-8. rechazo de propiedades adicionales;
-9. referencias de casos sin duplicados;
-10. trazabilidad de actualización;
-11. transición activa → inactiva;
-12. orígenes por condición sanitaria, casos y SIR;
-13. referencias huérfanas;
-14. coherencia de albergue;
-15. tres índices correctos y no únicos;
-16. migración 012 registrada exactamente una vez;
-17. múltiples alertas en la misma fecha;
-18. ausencia deliberada de `prioridad`;
-19. ausencia deliberada de `analisis_ia_id`;
-20. catálogos abiertos de tipo y fuente.
+```text
+test_estados_semaforo.js
+50/50
+```
 
 Resultado:
 
 ```text
-Pruebas exitosas: 40
+Pruebas exitosas: 50
 Pruebas fallidas: 0
-```
-
-La suite fue repetida después de ejecutar:
-
-```text
-init_semaforo_vital.js
-```
-
-manteniendo:
-
-```text
-40/40
 ```
 
 ---
@@ -2023,6 +2131,16 @@ ix_alertas_nivel_activa
 
 No únicos.
 
+## `estados_semaforo`
+
+```text
+ix_estados_semaforo_albergue_fecha
+ix_estados_semaforo_albergue_nivel_fecha
+ix_estados_semaforo_nivel_fecha
+```
+
+No únicos.
+
 ## `schema_migrations`
 
 ```text
@@ -2060,7 +2178,9 @@ secretos
 
 `predicciones_sir` almacena resultados epidemiológicos agregados.
 
-`alertas` almacena eventos agregados del albergue y referencias documentales; no debe incorporar datos clínicos individualizados.
+`alertas` almacena eventos agregados del albergue y referencias documentales.
+
+`estados_semaforo` almacena estados agregados del albergue y referencias documentales.
 
 ---
 
@@ -2086,6 +2206,9 @@ La capa DBA garantiza:
 - contrato estructural de alertas;
 - ciclo de vida histórico de alertas;
 - trazabilidad de origen de alertas;
+- contrato histórico de estados del Semáforo Vital;
+- trazabilidad de fuentes utilizadas por cada estado;
+- relación estructural entre histórico y snapshot actual;
 - versionado de modelos;
 - trazabilidad documental de entradas;
 - validación estructural de parámetros SIR;
@@ -2124,7 +2247,11 @@ Backend y los componentes especializados deberán garantizar:
 - generación funcional de alertas;
 - cierre lógico de alertas sin eliminar histórico;
 - control de exposición pública mediante `publica`;
-- coherencia entre alerta y datos de origen.
+- coherencia entre alerta y datos de origen;
+- calcular el nuevo estado del Semáforo Vital según reglas funcionales aprobadas;
+- persistir un nuevo documento en `estados_semaforo` por cada cálculo;
+- mantener coherencia entre las fuentes del estado y el albergue;
+- actualizar `metricas_albergue.estado_actual.semaforo_vital` después de persistir correctamente el estado.
 
 Para SIR deberá validarse fuera del `$jsonSchema`, cuando la especificación matemática lo determine:
 
@@ -2181,8 +2308,7 @@ predicciones_sir     alertas ✓
         │              │
         └──────┬───────┘
                ▼
-       estados_semaforo
-           PENDIENTE
+       estados_semaforo ✓
                │
                ▼
 metricas_albergue.estado_actual
@@ -2194,7 +2320,7 @@ metricas_albergue.estado_actual
 
 `alertas` ya forma parte del modelo persistente.
 
-`estados_semaforo` será la fuente histórica oficial del estado del Semáforo Vital.
+`estados_semaforo` ya forma parte del modelo persistente y es la fuente histórica oficial del estado del Semáforo Vital.
 
 ---
 
@@ -2296,6 +2422,7 @@ metricas_albergue               ✓
 analisis_ia                     ✓
 predicciones_sir                ✓
 alertas                         ✓
+estados_semaforo                ✓
 schema_migrations               ✓
 ```
 
@@ -2314,6 +2441,7 @@ Migraciones:
 010_create_historial_poblacion            ✓
 011_create_predicciones_sir               ✓
 012_create_alertas                        ✓
+013_create_estados_semaforo               ✓
 ```
 
 Pruebas específicas:
@@ -2327,57 +2455,29 @@ analisis_ia                20/20
 historial_poblacion        18/18
 predicciones_sir           35/35
 alertas                    40/40
+estados_semaforo           50/50
 ```
 
-El Checkpoint 7 deja implementado:
+El Checkpoint 9 deja implementado:
 
 ```text
-Colección predicciones_sir                     ✓
-Migración 011                                   ✓
-Naturaleza histórica                            ✓
-Modelo y versión                                ✓
-beta y gamma                                    ✓
-Condiciones iniciales S/I/R                     ✓
-Horizonte temporal                              ✓
-Método numérico                                 ✓
-Trazabilidad historial_poblacion                ✓
-Trazabilidad casos_enfermedades                 ✓
-analisis_ia_id opcional                         ✓
-escenario_id preparado                          ✓
-Preprocesamiento                                ✓
-Trayectoria S/I/R                               ✓
-Índices históricos no únicos                    ✓
-Control de referencias                          ✓
-Init reproducible                               ✓
-Pruebas DBA                                    35/35
-Documentación                                   ✓
-```
-
-El Checkpoint 8 deja implementado:
-
-```text
-Colección alertas                              ✓
-Migración 012                                  ✓
-Dependencia de migración 011                   ✓
-Naturaleza histórica                           ✓
-nivel_riesgo verde/amarillo/rojo               ✓
-tipo_alerta abierto                            ✓
-mensaje                                        ✓
-activa/inactiva                                ✓
-publica                                        ✓
-datos_origen                                   ✓
-condicion_sanitaria_id                         ✓
-casos_enfermedades_ids                         ✓
-prediccion_sir_id                              ✓
-coherencia de albergue                         ✓
-registrado_por                                 ✓
-updated_by opcional                            ✓
-3 índices históricos                           ✓
-prioridad no incorporada sin definición        ✓
-analisis_ia_id no incorporado sin aprobación   ✓
-Init reproducible                              ✓
-Pruebas DBA                                  40/40
-Documentación                                  ✓
+Colección estados_semaforo                          ✓
+Migración 013                                       ✓
+Dependencia de migración 012                        ✓
+Naturaleza histórica append-only                    ✓
+nivel verde/amarillo/rojo                           ✓
+codigo Int32 sin mapeo artificial                   ✓
+datos_origen obligatorio                            ✓
+seis arrays de trazabilidad                         ✓
+coherencia de albergue                              ✓
+registrado_por                                      ✓
+3 índices históricos no únicos                      ✓
+relación con metricas_albergue.estado_actual        ✓
+fórmula de clasificación no inventada               ✓
+usuario técnico automático pendiente                ✓
+Init reproducible                                   ✓
+Pruebas DBA                                       50/50
+Documentación                                       ✓
 ```
 
 El estado estructural vigente se encuentra en:
@@ -2395,7 +2495,7 @@ database/mongodb/migrations/
 El siguiente número de migración disponible es:
 
 ```text
-013
+014
 ```
 
 siempre que no exista una nueva migración integrada en `main` antes de iniciar el siguiente checkpoint.
