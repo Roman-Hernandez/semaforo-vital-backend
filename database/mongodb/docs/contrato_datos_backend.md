@@ -31,6 +31,7 @@ Su objetivo es evitar inconsistencias durante la integración entre base de dato
 - relación entre histórico y snapshot actual;
 - escenarios hipotéticos e intervenciones simuladas;
 - relación de escenarios con IA y SIR;
+- auditoría histórica de actividades (RF-52);
 - evolución futura del esquema.
 
 La base de datos utilizada es:
@@ -59,6 +60,7 @@ predicciones_sir
 alertas
 estados_semaforo
 escenarios
+auditoria_actividades
 schema_migrations
 ```
 
@@ -83,6 +85,7 @@ schema_migrations
 | estado oficial/histórico del Semáforo Vital | `estados_semaforo` |
 | escenario hipotético | `escenarios` |
 | intervención simulada | `escenarios.intervenciones_simuladas` |
+| auditoría histórica de actividades | `auditoria_actividades` |
 
 Los nombres implementados forman parte del contrato y no deben modificarse unilateralmente.
 
@@ -972,6 +975,12 @@ Desde la migración 014 es una referencia lógica vigente:
 ```text
 predicciones_sir.escenario_id
     → escenarios._id
+
+auditoria_actividades.usuario_id
+    → usuarios._id
+
+auditoria_actividades.albergue_id
+    → albergues._id cuando albergue_id contiene ObjectId
 ```
 
 La ejecución sobre datos reales puede omitir `escenario_id`. Una ejecución hipotética puede asociarlo al escenario utilizado.
@@ -1347,6 +1356,7 @@ Fue incorporada mediante:
 
 ```text
 014_create_escenarios.js
+015_create_auditoria_actividades.js
 ```
 
 ## 12C.1 Propósito
@@ -1628,6 +1638,115 @@ No únicos.
 
 ---
 
+# 12D. Colección `auditoria_actividades`
+
+Incorporada mediante:
+
+```text
+015_create_auditoria_actividades.js
+```
+
+## Propósito
+
+`auditoria_actividades` conserva el histórico de actividades realizadas dentro del sistema y soporta el requerimiento **RF-52 Auditoría**, que permite al `super_administrador` consultar los registros de actividades.
+
+Esta colección define el contrato persistente; la captura efectiva de eventos y las decisiones funcionales corresponden a Backend.
+
+## Estructura
+
+```javascript
+{
+    _id: ObjectId,
+    usuario_id: ObjectId,
+    albergue_id: ObjectId | null,
+    fecha_actividad: Date,
+    accion: String,
+    entidad: String,
+    entidad_id: ObjectId | null,
+    descripcion: String,
+    created_at: Date
+}
+```
+
+## Campos obligatorios
+
+```text
+usuario_id
+albergue_id
+fecha_actividad
+accion
+entidad
+entidad_id
+created_at
+```
+
+`descripcion` es opcional. Se exige la presencia explícita de `albergue_id` y `entidad_id`, aunque puedan contener `null`.
+
+## Usuario y albergue
+
+`usuario_id` es un `ObjectId` que referencia lógicamente `usuarios._id` y representa el usuario responsable de la actividad. Para eventos automáticos queda pendiente la definición funcional de un usuario técnico; DBA no crea usuarios técnicos por iniciativa propia.
+
+`albergue_id` acepta `ObjectId` o `null`. Cuando tiene un `ObjectId` referencia `albergues._id`; `null` permite representar una actividad global. Backend determina cuándo procede ese valor.
+
+No se impone que `usuarios.albergue_id = auditoria_actividades.albergue_id`, porque un `super_administrador` puede operar sobre varios albergues. Backend valida los permisos efectivos.
+
+## Fecha, acción y entidad
+
+`fecha_actividad` es el instante funcional de ocurrencia, almacenado como BSON `Date` (instante UTC). `created_at` corresponde al instante técnico de persistencia.
+
+`accion` y `entidad` deben ser cadenas no vacías. No se establecen `enum` para estos campos porque todavía no existe un catálogo funcional cerrado aprobado.
+
+`entidad_id` acepta `ObjectId` o `null` e identifica, cuando exista, el documento relacionado. Su vínculo depende de `entidad`, por lo que no se crea una foreign key dinámica artificial ni se inventa un catálogo cerrado de entidades.
+
+`descripcion` proporciona contexto legible opcional y no debe incorporar contraseñas, tokens, credenciales, secretos ni datos clínicos individualizados.
+
+## Naturaleza histórica append-only
+
+```text
+1 actividad = 1 documento nuevo
+```
+
+Los eventos no incorporan `updated_at` ni `updated_by`. Una nueva actividad exige un nuevo documento, no la modificación de un evento anterior.
+
+El `$jsonSchema` valida la estructura, pero **no impide físicamente** operaciones `UPDATE` o `DELETE`. Backend y los permisos de base de datos deben respaldar la política append-only cuando corresponda.
+
+## Alcance de auditoría
+
+El contrato contempla usuario, albergue relacionado, fecha, acción, entidad, documento relacionado, descripción y fecha técnica.
+
+No incorpora actualmente campos forenses como `ip`, `user_agent`, `session_id`, `request_id`, `endpoint`, `metodo_http`, `before`, `after`, `valor_anterior`, `valor_nuevo`, `motivo`, `resultado` o `payload`, porque RF-52 no los define. Cualquier ampliación requerirá evolución del contrato mediante nueva migración.
+
+## Integridad
+
+La migración 015 comprueba que `usuario_id` corresponda a `usuarios._id` y que `albergue_id`, cuando no sea `null`, corresponda a `albergues._id`.
+
+MongoDB no valida las autorizaciones funcionales de usuario. Tampoco implementa claves foráneas dinámicas basadas en `entidad`.
+
+## Índices
+
+```javascript
+// ix_auditoria_fecha
+{ fecha_actividad: -1 }
+
+// ix_auditoria_usuario_fecha
+{ usuario_id: 1, fecha_actividad: -1 }
+
+// ix_auditoria_albergue_fecha
+{ albergue_id: 1, fecha_actividad: -1 }
+
+// ix_auditoria_entidad_fecha
+{ entidad: 1, entidad_id: 1, fecha_actividad: -1 }
+```
+
+Los cuatro índices son **no únicos** y permiten consulta cronológica global, por usuario, por albergue y por entidad/documento.
+
+## Responsabilidad Backend
+
+Backend deberá definir qué operaciones generan auditoría, los valores de `accion` y `entidad`, cuándo las referencias opcionales contienen `null`, el contenido de `descripcion`, los roles habilitados para consulta y la identidad de los procesos automáticos.
+
+
+---
+
 # 13. Migración 011
 
 Archivo:
@@ -1845,6 +1964,35 @@ schema_migrations
 
 ---
 
+# 14G. Migración 015
+
+Archivo:
+
+```text
+database/mongodb/migrations/015_create_auditoria_actividades.js
+```
+
+Dependencia:
+
+```text
+014_create_escenarios
+```
+
+Colecciones requeridas: `usuarios`, `albergues`, `schema_migrations`.
+
+La migración incorpora el contrato estructural de `auditoria_actividades`, configura `$jsonSchema` con validación `strict`, `validationAction: error` y `additionalProperties: false`, crea cuatro índices históricos no únicos y verifica referencias a usuarios y a albergues cuando están presentes.
+
+Conserva las acciones y entidades como cadenas abiertas, sin definir enums arbitrarios. Su propósito es garantizar persistencia válida, no capturar eventos automáticamente.
+
+---
+
+# 14H. Idempotencia de migración 015
+
+Para una colección existente, el patrón de mantenimiento es `collMod` sin `drop`, conservando datos existentes. El control de versiones corresponde a `schema_migrations`, donde debe existir una sola entrada con `version = 015_create_auditoria_actividades` una vez aplicada.
+
+
+---
+
 # 15. Inicialización reproducible
 
 Archivo:
@@ -1869,6 +2017,7 @@ predicciones_sir
 alertas
 estados_semaforo
 escenarios
+auditoria_actividades
 schema_migrations
 ```
 
@@ -1893,6 +2042,7 @@ predicciones_sir
 alertas
 estados_semaforo
 escenarios
+auditoria_actividades
 ```
 
 ---
@@ -2003,6 +2153,18 @@ migración registrada
 validationLevel strict
 validationAction error
 ```
+
+---
+
+## 16D. Pruebas DBA de auditoría de actividades
+
+```text
+test_auditoria_actividades.js
+Pruebas exitosas: 42
+Pruebas fallidas: 0
+```
+
+Resultado reportado en el Checkpoint 12.
 
 ---
 
@@ -2192,6 +2354,10 @@ Ambas referencias son opcionales y se utilizan para distinguir ejecuciones hipot
 
 ---
 
+La auditoría registra referencias lógicas a usuarios y, cuando aplica, a albergues. `entidad_id` no es una foreign key dinámica impuesta por MongoDB.
+
+---
+
 # 19. Trazabilidad
 
 Las colecciones operativas utilizan:
@@ -2249,7 +2415,9 @@ registrado_por
 created_at
 ```
 
-`analisis_ia`, `predicciones_sir`, `estados_semaforo` y `escenarios` son históricos append-only.
+`auditoria_actividades` utiliza `usuario_id`, `albergue_id`, `fecha_actividad`, `accion`, `entidad`, `entidad_id`, `created_at` y `descripcion` opcional. No utiliza `updated_at` ni `updated_by`.
+
+`analisis_ia`, `predicciones_sir`, `estados_semaforo`, `escenarios` y `auditoria_actividades` son históricos append-only.
 
 ---
 
@@ -2268,6 +2436,7 @@ test_predicciones_sir.js           35/35
 test_alertas.js                    40/40
 test_estados_semaforo.js           50/50
 test_escenarios.js                 69/69
+test_auditoria_actividades.js      42/42
 ```
 
 ---
@@ -2368,11 +2537,26 @@ ix_escenarios_albergue_created_at
 
 No único.
 
+## `auditoria_actividades`
+
+```text
+ix_auditoria_fecha
+ix_auditoria_usuario_fecha
+ix_auditoria_albergue_fecha
+ix_auditoria_entidad_fecha
+```
+
+Los cuatro son no únicos.
+
 ## `schema_migrations`
 
 ```text
 ux_schema_migrations_version
 ```
+
+---
+
+`auditoria_actividades` conserva metadatos funcionales y no debe incluir `password_hash`, contraseñas, credenciales, tokens, secretos, datos clínicos individualizados ni payloads completos sensibles. La descripción debe contener solamente el contexto indispensable para trazabilidad.
 
 ---
 
@@ -2408,7 +2592,12 @@ La capa DBA garantiza:
 - trazabilidad de datos fuente;
 - parámetros SIR estructuralmente válidos;
 - trayectoria SIR estructuralmente válida;
-- pruebas DBA.
+- pruebas DBA;
+- contrato histórico de auditoría de actividades;
+- validación estructural de eventos de auditoría;
+- referencias de auditoría a usuarios y opcionalmente albergues;
+- índices cronológicos, por usuario, albergue y entidad;
+- naturaleza append-only de los eventos de auditoría.
 
 DBA no implementa:
 
@@ -2418,6 +2607,9 @@ reglas funcionales de generación de alertas
 clasificación final del Semáforo Vital
 priorización funcional de intervenciones simuladas
 autorización de usuarios
+captura automática de actividades
+autorización para consultar auditoría
+definición funcional de acciones auditables
 ```
 
 ---
@@ -2449,7 +2641,14 @@ Backend deberá garantizar:
 - calcular el estado del Semáforo Vital según reglas funcionales aprobadas;
 - persistir un nuevo documento en `estados_semaforo` por cada cálculo;
 - validar la coherencia de las fuentes del estado;
-- actualizar `metricas_albergue.estado_actual.semaforo_vital` después de persistir el estado.
+- actualizar `metricas_albergue.estado_actual.semaforo_vital` después de persistir el estado;
+- registrar eventos en `auditoria_actividades` cuando corresponda;
+- definir qué operaciones generan auditoría y los valores de `accion` y `entidad`;
+- asignar `usuario_id`, `albergue_id` y `entidad_id` correctamente, utilizando `null` cuando aplique;
+- evitar secretos o datos sensibles en `descripcion`;
+- autorizar la consulta de auditoría exclusivamente a roles permitidos;
+- preservar los eventos históricos sin sobrescritura;
+- definir el usuario técnico de los procesos automáticos cuando exista aprobación.
 
 ---
 
@@ -2568,6 +2767,27 @@ La comparación y priorización de escenarios corresponde a Backend y componente
 
 ---
 
+# 27B. Relación con auditoría
+
+```text
+Usuario / proceso
+       │
+       ▼
+     Backend
+       ├── operación funcional
+       └── evento de auditoría
+                 │
+                 ▼
+        auditoria_actividades
+                 │
+                 ▼
+      consulta super_administrador
+```
+
+MongoDB conserva los documentos de auditoría. Backend decide cuándo generarlos y quién puede consultarlos. Redis no sustituye ni almacena este histórico.
+
+---
+
 # 28. Redis
 
 Redis forma parte de la arquitectura vigente como caché temporal del estado actual del Semáforo Vital.
@@ -2609,6 +2829,7 @@ analisis_ia
 predicciones_sir
 alertas
 estados_semaforo
+auditoria_actividades
 ```
 
 ## 28.1 Key
@@ -2877,10 +3098,18 @@ Posteriormente, el Checkpoint 11 utilizó ese número para:
 014_create_escenarios.js
 ```
 
+El Checkpoint 12 utilizó:
+
+```text
+015_create_auditoria_actividades.js
+```
+
+La auditoría no modifica el papel de Redis.
+
 El siguiente número disponible pasa a ser:
 
 ```text
-015
+016
 ```
 
 ---
@@ -2909,6 +3138,8 @@ secretos
 `estados_semaforo` almacena estados agregados y referencias documentales.
 
 `escenarios` almacena hipótesis sanitarias agregadas y referencias documentales; no debe contener datos individualizados de pacientes.
+
+`auditoria_actividades` conserva metadatos de actividades, sin datos clínicos individualizados ni secretos.
 
 ---
 
@@ -2984,6 +3215,7 @@ predicciones_sir                ✓
 alertas                         ✓
 estados_semaforo                ✓
 escenarios                      ✓
+auditoria_actividades           ✓
 schema_migrations               ✓
 ```
 
@@ -3004,6 +3236,7 @@ Migraciones:
 012_create_alertas                        ✓
 013_create_estados_semaforo               ✓
 014_create_escenarios                      ✓
+015_create_auditoria_actividades            ✓
 ```
 
 Pruebas:
@@ -3019,6 +3252,7 @@ predicciones_sir           35/35
 alertas                    40/40
 estados_semaforo           50/50
 escenarios                  69/69
+auditoria_actividades       42/42
 ```
 
 El Checkpoint 9 deja formalmente implementado:
@@ -3105,6 +3339,41 @@ Pruebas DBA                                         69/69
 Documentación                                         ✓
 ```
 
+El Checkpoint 12 incorpora al contrato:
+
+```text
+Colección auditoria_actividades                       ✓
+Migración 015                                         ✓
+Dependencia de migración 014                          ✓
+RF-52 Auditoría                                       ✓
+Validator strict                                      ✓
+additionalProperties false                            ✓
+Naturaleza histórica append-only                      ✓
+usuario_id obligatorio                                ✓
+albergue_id ObjectId o null                           ✓
+fecha_actividad obligatoria                           ✓
+accion String abierta                                 ✓
+entidad String abierta                                ✓
+entidad_id ObjectId o null                            ✓
+descripcion opcional                                  ✓
+created_at obligatorio                                ✓
+updated_at no permitido                               ✓
+updated_by no permitido                               ✓
+usuario_id → usuarios._id                             ✓
+albergue_id → albergues._id cuando aplica             ✓
+entidad_id sin foreign key dinámica artificial        ✓
+catálogo de acciones no inventado                     ✓
+catálogo de entidades no inventado                    ✓
+campos forenses no inventados                         ✓
+usuario técnico automático pendiente                  ✓
+índice cronológico global                             ✓
+índice por usuario                                    ✓
+índice por albergue                                   ✓
+índice por entidad/documento                          ✓
+Init reproducible                                     ✓
+Pruebas DBA                                         42/42
+```
+
 El contrato actual queda:
 
 ```text
@@ -3146,7 +3415,7 @@ reglas de priorización de intervenciones
 El próximo número de migración disponible es:
 
 ```text
-015
+016
 ```
 
 siempre que `main` no reciba otra migración antes del siguiente checkpoint.
