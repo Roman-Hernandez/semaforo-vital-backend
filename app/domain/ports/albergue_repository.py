@@ -1,20 +1,28 @@
-"""Puerto del repositorio de albergues. Los dicts devueltos usan `id` (str), no `_id`."""
+"""Puerto del repositorio administrativo de albergues. Solo entidades de dominio."""
+from datetime import datetime
 from typing import Protocol
+
+from app.domain.albergues import ShelterCreate
+from app.domain.shelters import Shelter, ShelterUpdate
 
 
 class AlbergueRepository(Protocol):
-    def crear(self, datos: dict) -> dict:
-        """Inserta el albergue. Lanza AlbergueDuplicado si el código ya existe."""
+    def add(self, command: ShelterCreate, user_id: str, now: datetime, day: datetime) -> Shelter:
+        """Inserta el albergue. Lanza DuplicateShelterCode si el código ya existe."""
         ...
 
-    def obtener(self, albergue_id: str) -> dict | None:
+    def find(self, shelter_id: str) -> Shelter | None:
         """Devuelve el albergue o None (también si el id no es válido)."""
         ...
 
-    def listar(self, activo: bool | None = None) -> list[dict]:
-        """Lista albergues ordenados por código; `activo` filtra si se indica."""
+    def list(self, active: bool | None = None) -> list[Shelter]:
+        """Lista albergues ordenados por código; `active` filtra si se indica."""
         ...
 
-    def actualizar(self, albergue_id: str, cambios: dict) -> dict | None:
-        """Aplica `$set` con los cambios y devuelve el documento actualizado (o None)."""
+    def update(
+        self, shelter_id: str, changes: ShelterUpdate, user_id: str, now: datetime,
+    ) -> Shelter | None: ...
+
+    def deactivate(self, shelter_id: str, user_id: str, now: datetime) -> Shelter | None:
+        """Desactivación lógica: no borra el documento ni su historial."""
         ...

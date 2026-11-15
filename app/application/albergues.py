@@ -1,119 +1,77 @@
-"""Casos de uso de albergues (RF-41, RF-14, RF-15). Sin dependencias de FastAPI ni de Mongo."""
-from datetime import datetime, timezone
-from typing import Optional
+"""Casos de uso de albergues (RF-41, RF-14, RF-15). Sin FastAPI, pydantic ni Mongo."""
+from datetime import datetime
 
-from app.core.timezone import start_of_day_colombia
-from app.domain.albergues import (
-    ADMIN_ALBERGUE,
-    SUPER_ADMIN,
-    AlbergueCreate,
-    AlbergueInactivo,
-    AlbergueNoEncontrado,
-    AlbergueSinPermiso,
-    AlbergueUpdate,
-)
+from app.domain.albergues import ShelterCreate
+from app.domain.errors import InsufficientPermissions, ShelterInactive, ShelterNotFound
 from app.domain.ports.albergue_repository import AlbergueRepository
-
-
-def _ahora() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _rol(actor) -> str | None:
-    """El rol puede llegar como UserRole (Enum) o como str; se compara siempre por valor."""
-    rol = getattr(actor, "role", None)
-    return getattr(rol, "value", rol)
+from app.domain.shelters import Shelter, ShelterUpdate
+from app.domain.users import User, UserRole
 
 
 class AlbergueService:
-    """`actor` es el usuario autenticado: debe exponer `.id`, `.role` y `.albergue_id`."""
-
-    def __init__(self, repositorio: AlbergueRepository):
-        self._repo = repositorio
-
-    # --- permisos -----------------------------------------------------------
-    @staticmethod
-    def _es_super(actor) -> bool:
-        return _rol(actor) == SUPER_ADMIN
+    def __init__(self, repository: AlbergueRepository):
+        self.repository = repository
 
     @staticmethod
-    def _es_admin_de(actor, albergue_id: str) -> bool:
-        propio = getattr(actor, "albergue_id", None)
+    def _is_super(actor: User) -> bool:
+        return actor.role == UserRole.SUPER_ADMIN
+
+    @staticmethod
+    def _is_admin_of(actor: User, shelter_id: str) -> bool:
         return (
-            _rol(actor) == ADMIN_ALBERGUE
-            and propio is not None
-            and str(propio) == str(albergue_id)
+            actor.role == UserRole.SHELTER_ADMIN
+            and actor.albergue_id is not None
+            and str(actor.albergue_id) == str(shelter_id)
         )
 
-    def _exigir_super(self, actor) -> None:
-        if not self._es_super(actor):
-            raise AlbergueSinPermiso("Solo el súper administrador puede realizar esta operación")
+    def _require_super(self, actor: User) -> None:
+        if not self._is_super(actor):
+            raise InsufficientPermissions()
 
-    def _obtener_o_404(self, albergue_id: str) -> dict:
-        doc = self._repo.obtener(albergue_id)
-        if doc is None:
-            raise AlbergueNoEncontrado("Albergue no encontrado")
-        return doc
+    def _find(self, shelter_id: str) -> Shelter:
+        shelter = self.repository.find(shelter_id)
+        if shelter is None:
+            raise ShelterNotFound()
+        return shelter
 
-    # --- casos de uso -------------------------------------------------------
-    def crear(self, actor, datos: AlbergueCreate) -> dict:
-        self._exigir_super(actor)
-        doc = datos.model_dump(exclude_none=True)
-        ahora = _ahora()
-        doc.update(
-            activo=True,
-            registrado_por=str(actor.id),
-            fecha=start_of_day_colombia(ahora),  # fecha funcional (America/Bogota)
-            created_at=ahora,
-            updated_at=ahora,
-        )
-        return self._repo.crear(doc)
+    def create(self, actor: User, command: ShelterCreate, now: datetime, day: datetime) -> Shelter:
+        self._require_super(actor)
+        return self.repository.add(command, actor.id, now, day)
 
-    def listar(self, actor, activo: Optional[bool] = None) -> list[dict]:
-        if self._es_super(actor):
-            return self._repo.listar(activo)
-        propio = getattr(actor, "albergue_id", None)
-        if _rol(actor) == ADMIN_ALBERGUE and propio is not None:
-            doc = self._repo.obtener(str(propio))
-            return [doc] if doc else []
-        raise AlbergueSinPermiso("No tienes permiso para consultar albergues")
+    def list(self, actor: User, active: bool | None = None) -> list[Shelter]:
+        if self._is_super(actor):
+            return self.repository.list(active)
+        if actor.role == UserRole.SHELTER_ADMIN and actor.albergue_id is not None:
+            shelter = self.repository.find(str(actor.albergue_id))
+            return [shelter] if shelter else []
+        raise InsufficientPermissions()
 
-    def obtener(self, actor, albergue_id: str) -> dict:
-        if not (self._es_super(actor) or self._es_admin_de(actor, albergue_id)):
-            raise AlbergueSinPermiso("No tienes permiso para consultar este albergue")
-        return self._obtener_o_404(albergue_id)
+    def get(self, actor: User, shelter_id: str) -> Shelter:
+        if not (self._is_super(actor) or self._is_admin_of(actor, shelter_id)):
+            raise InsufficientPermissions()
+        return self._find(shelter_id)
 
-    def actualizar(self, actor, albergue_id: str, cambios: AlbergueUpdate) -> dict:
-        es_super = self._es_super(actor)
-        if not (es_super or self._es_admin_de(actor, albergue_id)):
-            raise AlbergueSinPermiso("No tienes permiso para modificar este albergue")
+    def update(self, actor: User, shelter_id: str, changes: ShelterUpdate, now: datetime) -> Shelter:
+        is_super = self._is_super(actor)
+        if not (is_super or self._is_admin_of(actor, shelter_id)):
+            raise InsufficientPermissions()
         # RF-15: el administrador solo actualiza información básica (capacidad y ubicación).
-        if not es_super and cambios.nombre is not None:
-            raise AlbergueSinPermiso("Solo el súper administrador puede cambiar el nombre")
+        if not is_super and changes.nombre is not None:
+            raise InsufficientPermissions()
+        if not self._find(shelter_id).activo:
+            raise ShelterInactive()
+        updated = self.repository.update(shelter_id, changes, actor.id, now)
+        if updated is None:
+            raise ShelterNotFound()
+        return updated
 
-        doc = self._obtener_o_404(albergue_id)
-        if not doc.get("activo", True):
-            raise AlbergueInactivo("El albergue está desactivado y no puede modificarse")
-
-        datos = cambios.model_dump(exclude_none=True)
-        datos["updated_at"] = _ahora()
-        datos["updated_by"] = str(actor.id)
-        actualizado = self._repo.actualizar(albergue_id, datos)
-        if actualizado is None:
-            raise AlbergueNoEncontrado("Albergue no encontrado")
-        return actualizado
-
-    def desactivar(self, actor, albergue_id: str) -> dict:
-        """Desactivación lógica: no borra el albergue ni su historial (RNF-12)."""
-        self._exigir_super(actor)
-        doc = self._obtener_o_404(albergue_id)
-        if not doc.get("activo", True):
-            return doc  # idempotente
-        ahora = _ahora()
-        actualizado = self._repo.actualizar(
-            albergue_id,
-            {"activo": False, "updated_at": ahora, "updated_by": str(actor.id)},
-        )
-        if actualizado is None:
-            raise AlbergueNoEncontrado("Albergue no encontrado")
-        return actualizado
+    def deactivate(self, actor: User, shelter_id: str, now: datetime) -> Shelter:
+        """Desactivación lógica: no borra el albergue ni su historial (RNF-12). Idempotente."""
+        self._require_super(actor)
+        shelter = self._find(shelter_id)
+        if not shelter.activo:
+            return shelter
+        updated = self.repository.deactivate(shelter_id, actor.id, now)
+        if updated is None:
+            raise ShelterNotFound()
+        return updated

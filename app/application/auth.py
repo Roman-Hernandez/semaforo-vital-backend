@@ -1,27 +1,9 @@
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 
-import jwt
-from pwdlib import PasswordHash
-
-from app.core.config import settings
+from app.domain.errors import InactiveUser, InvalidCredentials
 from app.domain.ports.user_repository import UserRepository
-
-_passwords = PasswordHash.recommended()
-# Generated once per process to reduce timing differences for unknown users.
-_DUMMY_HASH = _passwords.hash("not-a-real-password")
-
-
-class InvalidCredentials(Exception):
-    pass
-
-
-class InvalidTokenError(Exception):
-    pass
-
-
-class TokenExpiredError(InvalidTokenError):
-    pass
+from app.domain.users import User
 
 
 @dataclass(frozen=True)
@@ -30,49 +12,32 @@ class AuthToken:
     token_type: str = "bearer"
 
 
-def decode_access_token(token: str) -> dict:
-    if len(settings.jwt_secret_key) < 32:
-        raise RuntimeError("JWT_SECRET_KEY must contain at least 32 characters")
-    try:
-        return jwt.decode(
-            token,
-            settings.jwt_secret_key,
-            algorithms=["HS256"],
-            options={"require": ["sub", "role", "exp", "iat"]},
-        )
-    except jwt.ExpiredSignatureError:
-        raise TokenExpiredError("Token has expired") from None
-    except jwt.PyJWTError as exc:
-        raise InvalidTokenError(f"Invalid token: {exc}") from None
-
-
 class AuthenticateUserUseCase:
-    def __init__(self, user_repository: UserRepository):
+    def __init__(
+        self,
+        user_repository: UserRepository,
+        verify_password: Callable[[str, str | None], bool],
+        issue_token: Callable[[User], AuthToken],
+    ):
         self.user_repository = user_repository
+        self.verify_password = verify_password
+        self.issue_token = issue_token
 
     def execute(self, email: str, password: str) -> AuthToken:
-        normalized_email = email.strip().lower()
-        user = self.user_repository.find_by_email(normalized_email)
-        password_hash = user.password_hash if user is not None else _DUMMY_HASH
-        try:
-            matches = _passwords.verify(password, password_hash)
-        except (ValueError, TypeError):
-            matches = False
+        user = self.user_repository.find_by_email(email.strip().lower())
+        matches = self.verify_password(password, user.password_hash if user else None)
         if not user or not matches or not user.active:
             raise InvalidCredentials()
-        if len(settings.jwt_secret_key) < 32:
-            raise RuntimeError("JWT_SECRET_KEY must contain at least 32 characters")
-
-        now = datetime.now(UTC)
-        payload = {
-            "sub": user.id,
-            "role": user.role.value,
-            "iat": now,
-            "exp": now + timedelta(minutes=settings.jwt_access_token_minutes),
-        }
-        encoded = jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
-        return AuthToken(access_token=encoded)
+        return self.issue_token(user)
 
 
-def authenticate(repository: UserRepository, email: str, password: str) -> AuthToken:
-    return AuthenticateUserUseCase(repository).execute(email, password)
+class ResolveUserUseCase:
+    def __init__(self, repository: UserRepository, decode_token: Callable[[str], str]):
+        self.repository = repository
+        self.decode_token = decode_token
+
+    def execute(self, token: str) -> User:
+        user = self.repository.find_by_id(self.decode_token(token))
+        if not user or not user.active:
+            raise InactiveUser()
+        return user
