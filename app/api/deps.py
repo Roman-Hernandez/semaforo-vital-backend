@@ -12,6 +12,7 @@ from app.application.auth import (
     AuthToken,
     ResolveUserUseCase,
 )
+from app.application.daily_records import DailyRecordService
 from app.application.shelters import ShelterService
 from app.core.config import settings
 from app.domain.errors import InsufficientPermissions, NotAuthenticated
@@ -25,6 +26,9 @@ from app.infrastructure.repositories.cached_shelter_repository import (
 )
 from app.infrastructure.repositories.mongo_albergue_repository import (
     MongoAlbergueRepository,
+)
+from app.infrastructure.repositories.mongo_daily_record_repository import (
+    MongoDailyRecordRepository,
 )
 from app.infrastructure.repositories.mongo_shelter_repository import (
     MongoShelterRepository,
@@ -160,6 +164,15 @@ def require_role(
         return current_user
 
     return role_checker
+
+
+def get_daily_record_service(
+    database: Annotated[Database, Depends(get_database)],
+) -> DailyRecordService:
+    return DailyRecordService(
+        MongoDailyRecordRepository(database),
+        MongoShelterRepository(database),
+    )
 
 
 def get_shelter_service(
