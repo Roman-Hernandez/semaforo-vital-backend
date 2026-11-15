@@ -1,6 +1,6 @@
 """Pruebas de la API de albergues (RF-41). Usan un repositorio en memoria: no requieren MongoDB."""
 import copy
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.api import deps
 from app.api.v1.endpoints.albergues import router
+from app.core.timezone import APP_TIMEZONE
 from app.domain.albergues import AlbergueDuplicado
 from app.domain.users import UserRole
 
@@ -161,6 +162,7 @@ def _ubic_con(coordinates=None, **extra):
         {"ubicacion": _ubic_con([-75.69])},           # falta la latitud
         {"ubicacion": _ubic_con([-75.69, 4.8, 10])},  # sobra un valor
         {"ubicacion": _ubic_con(municipio="")},
+        {"ubicacion": _ubic_con(direccion="")},
         {"campo_desconocido": "x"},
     ],
 )
@@ -175,6 +177,25 @@ def test_campos_obligatorios(make_client, campo):
     cuerpo = payload()
     del cuerpo[campo]
     assert make_client(SUPER).post(BASE, json=cuerpo).status_code == 422
+
+
+def test_direccion_es_obligatoria(make_client, repo):
+    u = _ubic_con()
+    del u["direccion"]
+    assert make_client(SUPER).post(BASE, json=payload(ubicacion=u)).status_code == 422
+    assert repo.docs == {}
+
+
+def test_crear_fija_fecha_funcional_en_bogota(make_client):
+    cuerpo = make_client(SUPER).post(BASE, json=payload()).json()
+    fecha = datetime.fromisoformat(cuerpo["fecha"])
+    assert fecha.astimezone(APP_TIMEZONE).time() == time.min  # 00:00 America/Bogota
+
+
+def test_modificar_registra_updated_by(make_client, repo):
+    a = sembrar(repo)
+    r = make_client(SUPER).patch(f"{BASE}/{a['id']}", json={"capacidad_instalada": 300})
+    assert r.json()["updated_by"] == SUPER.id
 
 
 def test_tipo_de_geometria_debe_ser_point(make_client):
@@ -263,7 +284,8 @@ def test_desactivar_no_elimina_el_albergue(make_client, repo):
     r = client.patch(f"{BASE}/{a['id']}/desactivar")
     assert r.status_code == 200
     assert r.json()["activo"] is False
-    assert r.json()["desactivado_en"] is not None
+    assert r.json()["updated_by"] == SUPER.id
+    assert r.json()["updated_at"] is not None
     # Sigue existiendo y consultable: el historial relacionado no se pierde.
     assert a["id"] in repo.docs
     assert client.get(f"{BASE}/{a['id']}").json()["activo"] is False

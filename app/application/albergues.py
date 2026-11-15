@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
+from app.core.timezone import start_of_day_colombia
 from app.domain.albergues import (
     ADMIN_ALBERGUE,
     SUPER_ADMIN,
@@ -62,6 +63,7 @@ class AlbergueService:
         doc.update(
             activo=True,
             registrado_por=str(actor.id),
+            fecha=start_of_day_colombia(ahora),  # fecha funcional (America/Bogota)
             created_at=ahora,
             updated_at=ahora,
         )
@@ -95,6 +97,7 @@ class AlbergueService:
 
         datos = cambios.model_dump(exclude_none=True)
         datos["updated_at"] = _ahora()
+        datos["updated_by"] = str(actor.id)
         actualizado = self._repo.actualizar(albergue_id, datos)
         if actualizado is None:
             raise AlbergueNoEncontrado("Albergue no encontrado")
@@ -108,7 +111,8 @@ class AlbergueService:
             return doc  # idempotente
         ahora = _ahora()
         actualizado = self._repo.actualizar(
-            albergue_id, {"activo": False, "desactivado_en": ahora, "updated_at": ahora}
+            albergue_id,
+            {"activo": False, "updated_at": ahora, "updated_by": str(actor.id)},
         )
         if actualizado is None:
             raise AlbergueNoEncontrado("Albergue no encontrado")

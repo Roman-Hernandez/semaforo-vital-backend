@@ -23,8 +23,9 @@ class MongoAlbergueRepository:
     def _a_entidad(doc: dict) -> dict:
         entidad = dict(doc)
         entidad["id"] = str(entidad.pop("_id"))
-        if entidad.get("registrado_por") is not None:
-            entidad["registrado_por"] = str(entidad["registrado_por"])
+        for campo in ("registrado_por", "updated_by"):
+            if entidad.get(campo) is not None:
+                entidad[campo] = str(entidad[campo])
         return entidad
 
     def crear(self, datos: dict) -> dict:
@@ -58,6 +59,9 @@ class MongoAlbergueRepository:
         oid = self._oid(albergue_id)
         if oid is None:
             return None
+        cambios = dict(cambios)
+        if cambios.get("updated_by") is not None:
+            cambios["updated_by"] = ObjectId(cambios["updated_by"])
         try:
             doc = self._col.find_one_and_update(
                 {"_id": oid}, {"$set": cambios}, return_document=ReturnDocument.AFTER

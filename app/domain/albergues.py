@@ -57,7 +57,7 @@ class Ubicacion(BaseModel):
 
     departamento: str = Field(min_length=1, max_length=80)
     municipio: str = Field(min_length=1, max_length=80)
-    direccion: Optional[str] = Field(default=None, max_length=200)
+    direccion: str = Field(min_length=1, max_length=200)
     coordenadas: Coordenadas
 
 
@@ -102,6 +102,7 @@ class AlbergueOut(BaseModel):
     ubicacion: Ubicacion
     activo: bool
     registrado_por: Optional[str] = None
+    fecha: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    desactivado_en: Optional[datetime] = None
+    updated_by: Optional[str] = None
