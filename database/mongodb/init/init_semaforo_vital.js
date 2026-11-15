@@ -18,6 +18,7 @@
 //   - alertas
 //   - estados_semaforo
 //   - escenarios
+//   - auditoria_actividades
 //   - schema_migrations
 //
 // Responsabilidad:
@@ -53,6 +54,10 @@
 // escenarios fue incorporada mediante:
 //
 //   014_create_escenarios
+//
+// auditoria_actividades fue incorporada mediante:
+//
+//   015_create_auditoria_actividades
 //
 // El backfill desde registros_diarios hacia historial_poblacion
 // pertenece exclusivamente a la migración 010.
@@ -3043,6 +3048,162 @@ const validatorEscenarios = {
 };
 
 // ============================================================
+// 10D. VALIDADOR - AUDITORÍA DE ACTIVIDADES
+// ============================================================
+//
+// Conserva el histórico de actividades realizadas dentro
+// del sistema.
+//
+// RF-52:
+// El súper administrador debe poder consultar los registros
+// de actividades realizadas dentro del sistema.
+//
+// La colección se considera histórica / append-only.
+//
+// 1 actividad
+//     =
+// 1 documento nuevo
+//
+// NO se utilizan:
+//
+// updated_at
+// updated_by
+//
+// accion y entidad permanecen abiertas porque no existe
+// todavía un catálogo funcional aprobado.
+//
+// La existencia de este contrato no captura actividades
+// automáticamente. Backend deberá generar los eventos.
+// ============================================================
+
+const validatorAuditoriaActividades = {
+
+    $jsonSchema: {
+
+        bsonType:
+            "object",
+
+        title:
+            "Esquema de validación de auditoría de actividades",
+
+        additionalProperties:
+            false,
+
+        required: [
+
+            "usuario_id",
+            "albergue_id",
+            "fecha_actividad",
+            "accion",
+            "entidad",
+            "entidad_id",
+            "created_at"
+        ],
+
+        properties: {
+
+            _id: {
+
+                bsonType:
+                    "objectId"
+            },
+
+
+            usuario_id: {
+
+                bsonType:
+                    "objectId",
+
+                description:
+                    "Usuario que realizó la actividad. Referencia lógica hacia usuarios._id"
+            },
+
+
+            albergue_id: {
+
+                bsonType: [
+
+                    "objectId",
+                    "null"
+                ],
+
+                description:
+                    "Albergue relacionado con la actividad cuando corresponda"
+            },
+
+
+            fecha_actividad: {
+
+                bsonType:
+                    "date",
+
+                description:
+                    "Instante en el que ocurrió la actividad auditada"
+            },
+
+
+            accion: {
+
+                bsonType:
+                    "string",
+
+                minLength:
+                    1,
+
+                description:
+                    "Acción realizada. Catálogo funcional pendiente"
+            },
+
+
+            entidad: {
+
+                bsonType:
+                    "string",
+
+                minLength:
+                    1,
+
+                description:
+                    "Entidad o recurso sobre el cual se realizó la actividad"
+            },
+
+
+            entidad_id: {
+
+                bsonType: [
+
+                    "objectId",
+                    "null"
+                ],
+
+                description:
+                    "Identificador del documento relacionado cuando exista"
+            },
+
+
+            descripcion: {
+
+                bsonType:
+                    "string",
+
+                description:
+                    "Descripción opcional y legible de la actividad"
+            },
+
+
+            created_at: {
+
+                bsonType:
+                    "date",
+
+                description:
+                    "Instante técnico de persistencia del evento"
+            }
+        }
+    }
+};
+
+// ============================================================
 // 11. FUNCIÓN IDEMPOTENTE
 // ============================================================
 
@@ -3198,6 +3359,10 @@ crearOActualizarColeccion(
     validatorEscenarios
 );
 
+crearOActualizarColeccion(
+    "auditoria_actividades",
+    validatorAuditoriaActividades
+);
 
 // ============================================================
 // 13. SCHEMA MIGRATIONS
@@ -3841,6 +4006,98 @@ print(
 );
 
 // ------------------------------------------------------------
+// auditoria_actividades
+// ------------------------------------------------------------
+//
+// Histórico de actividades realizadas dentro del sistema.
+//
+// Ningún índice debe ser UNIQUE.
+// ------------------------------------------------------------
+
+db.auditoria_actividades.createIndex(
+    {
+        fecha_actividad:
+            -1
+    },
+    {
+        name:
+            "ix_auditoria_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_auditoria_fecha"
+);
+
+
+db.auditoria_actividades.createIndex(
+    {
+        usuario_id:
+            1,
+
+        fecha_actividad:
+            -1
+    },
+    {
+        name:
+            "ix_auditoria_usuario_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_auditoria_usuario_fecha"
+);
+
+
+db.auditoria_actividades.createIndex(
+    {
+        albergue_id:
+            1,
+
+        fecha_actividad:
+            -1
+    },
+    {
+        name:
+            "ix_auditoria_albergue_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_auditoria_albergue_fecha"
+);
+
+
+db.auditoria_actividades.createIndex(
+    {
+        entidad:
+            1,
+
+        entidad_id:
+            1,
+
+        fecha_actividad:
+            -1
+    },
+    {
+        name:
+            "ix_auditoria_entidad_fecha"
+    }
+);
+
+
+print(
+    "✓ Índice creado/verificado: " +
+    "ix_auditoria_entidad_fecha"
+);
+
+// ------------------------------------------------------------
 // schema_migrations
 // ------------------------------------------------------------
 
@@ -3966,6 +4223,15 @@ print(
 
 print(
     "✓ Integración de escenarios con analisis_ia y predicciones_sir disponible"
+);
+
+print(
+    "✓ auditoria_actividades histórica disponible"
+);
+
+
+print(
+    "✓ Auditoría por usuario, albergue y entidad disponible"
 );
 
 print(
