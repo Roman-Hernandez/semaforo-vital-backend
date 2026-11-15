@@ -5,16 +5,18 @@ from typing import Annotated
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pymongo.database import Database
-from app.domain.ports.albergue_repository import AlbergueRepository
-from app.infrastructure.repositories.mongo_albergue_repository import MongoAlbergueRepository
 
 from app.application.auth import AuthenticateUserUseCase, AuthToken, ResolveUserUseCase
 from app.application.shelters import ShelterService
 from app.core.config import settings
 from app.domain.errors import InsufficientPermissions, NotAuthenticated
+from app.domain.ports.albergue_repository import AlbergueRepository
 from app.domain.ports.user_repository import UserRepository
 from app.domain.users import User, UserRole
 from app.infrastructure.database.mongodb import get_database_from_request
+from app.infrastructure.repositories.mongo_albergue_repository import (
+    MongoAlbergueRepository,
+)
 from app.infrastructure.repositories.mongo_shelter_repository import (
     MongoShelterRepository,
 )

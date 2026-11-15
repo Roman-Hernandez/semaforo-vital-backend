@@ -1,5 +1,4 @@
 """Implementación del repositorio de albergues sobre pymongo."""
-from typing import Optional
 
 from bson import ObjectId
 from pymongo import ReturnDocument
@@ -16,7 +15,7 @@ class MongoAlbergueRepository:
         self._col = database["albergues"]
 
     @staticmethod
-    def _oid(valor: str) -> Optional[ObjectId]:
+    def _oid(valor: str) -> ObjectId | None:
         return ObjectId(valor) if ObjectId.is_valid(valor) else None
 
     @staticmethod
@@ -43,18 +42,18 @@ class MongoAlbergueRepository:
             raise
         return self._a_entidad(doc)
 
-    def obtener(self, albergue_id: str) -> Optional[dict]:
+    def obtener(self, albergue_id: str) -> dict | None:
         oid = self._oid(albergue_id)
         if oid is None:
             return None
         doc = self._col.find_one({"_id": oid})
         return self._a_entidad(doc) if doc else None
 
-    def listar(self, activo: Optional[bool] = None) -> list[dict]:
+    def listar(self, activo: bool | None = None) -> list[dict]:
         filtro = {} if activo is None else {"activo": activo}
         return [self._a_entidad(d) for d in self._col.find(filtro).sort("codigo_albergue", 1)]
 
-    def actualizar(self, albergue_id: str, cambios: dict) -> Optional[dict]:
+    def actualizar(self, albergue_id: str, cambios: dict) -> dict | None:
         oid = self._oid(albergue_id)
         if oid is None:
             return None

@@ -1,7 +1,7 @@
 """Dominio de albergues (RF-41): modelos de entrada/salida, roles y errores."""
 import re
 from datetime import datetime
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -57,7 +57,7 @@ class Ubicacion(BaseModel):
 
     departamento: str = Field(min_length=1, max_length=80)
     municipio: str = Field(min_length=1, max_length=80)
-    direccion: Optional[str] = Field(default=None, max_length=200)
+    direccion: str | None = Field(default=None, max_length=200)
     coordenadas: Coordenadas
 
 
@@ -83,9 +83,9 @@ class AlbergueUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    nombre: Optional[str] = Field(default=None, min_length=3, max_length=120)
-    capacidad_instalada: Optional[int] = Field(default=None, strict=True, ge=1, le=100_000)
-    ubicacion: Optional[Ubicacion] = None
+    nombre: str | None = Field(default=None, min_length=3, max_length=120)
+    capacidad_instalada: int | None = Field(default=None, strict=True, ge=1, le=100_000)
+    ubicacion: Ubicacion | None = None
 
     @model_validator(mode="after")
     def _al_menos_un_campo(self) -> "AlbergueUpdate":
@@ -101,7 +101,7 @@ class AlbergueOut(BaseModel):
     capacidad_instalada: int
     ubicacion: Ubicacion
     activo: bool
-    registrado_por: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    desactivado_en: Optional[datetime] = None
+    registrado_por: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    desactivado_en: datetime | None = None

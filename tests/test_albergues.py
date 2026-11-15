@@ -1,6 +1,6 @@
 """Pruebas de la API de albergues (RF-41). Usan un repositorio en memoria: no requieren MongoDB."""
 import copy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -64,7 +64,7 @@ def payload(**cambios):
 
 def sembrar(repo, codigo="SIM-PER-001", activo=True):
     doc = payload(codigo_albergue=codigo)
-    doc.update(activo=activo, registrado_por=SUPER.id, created_at=datetime.now(timezone.utc))
+    doc.update(activo=activo, registrado_por=SUPER.id, created_at=datetime.now(UTC))
     return repo.crear(doc)
 
 

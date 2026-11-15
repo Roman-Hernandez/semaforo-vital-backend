@@ -1,6 +1,5 @@
 """Casos de uso de albergues (RF-41, RF-14, RF-15). Sin dependencias de FastAPI ni de Mongo."""
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from app.domain.albergues import (
     ADMIN_ALBERGUE,
@@ -15,7 +14,7 @@ from app.domain.ports.albergue_repository import AlbergueRepository
 
 
 def _ahora() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _rol(actor) -> str | None:
@@ -67,7 +66,7 @@ class AlbergueService:
         )
         return self._repo.crear(doc)
 
-    def listar(self, actor, activo: Optional[bool] = None) -> list[dict]:
+    def listar(self, actor, activo: bool | None = None) -> list[dict]:
         if self._es_super(actor):
             return self._repo.listar(activo)
         propio = getattr(actor, "albergue_id", None)
