@@ -48,6 +48,11 @@ from app.domain.shelters import (
     TrafficLight,
 )
 
+_MATCH = "$match"
+_GROUP = "$group"
+_SORT = "$sort"
+_FIRST = "$first"
+
 
 def _plain(value):
     """Normalización privada del adaptador; no exporta documentos a la aplicación."""
@@ -232,8 +237,8 @@ class MongoShelterRepository:
         analysis = latest("analisis_ia", "fecha_ejecucion", real_only=True)
         official = latest("estados_semaforo", "fecha_calculo")
         alert_groups = _plain(list(self.database.alertas.aggregate([
-            {"$match": scope},
-            {"$group": {
+            {_MATCH: scope},
+            {_GROUP: {
                 "_id": "$nivel_riesgo",
                 "cantidad": {"$sum": {"$cond": ["$activa", 1, 0]}},
                 "ultima_actualizacion": {"$max": {"$ifNull": ["$updated_at", "$created_at"]}},
@@ -244,19 +249,19 @@ class MongoShelterRepository:
             counts[group["id"]] = group["cantidad"]
         alert_dates = [group["ultima_actualizacion"] for group in alert_groups if group.get("ultima_actualizacion")]
         simulations = list(self.database.predicciones_sir.aggregate([
-            {"$match": {**scope, "escenario_id": None}},
-            {"$sort": {"fecha_ejecucion": -1, "_id": -1}},
-            {"$group": {"_id": "$enfermedad", "simulation": {"$first": "$$ROOT"}}},
+            {_MATCH: {**scope, "escenario_id": None}},
+            {_SORT: {"fecha_ejecucion": -1, "_id": -1}},
+            {_GROUP: {"_id": "$enfermedad", "simulation": {_FIRST: "$$ROOT"}}},
             {"$replaceRoot": {"newRoot": "$simulation"}},
-            {"$sort": {"fecha_ejecucion": -1, "_id": -1}},
+            {_SORT: {"fecha_ejecucion": -1, "_id": -1}},
             {"$limit": limit},
         ]))
         summaries = _plain(list(self.database.casos_enfermedades.aggregate([
-            {"$match": scope},
-            {"$sort": {"fecha": -1, "_id": -1}},
-            {"$group": {"_id": "$enfermedad", "cantidad_casos_activos": {"$first": "$cantidad_casos_activos"}, "fecha": {"$first": "$fecha"}}},
+            {_MATCH: scope},
+            {_SORT: {"fecha": -1, "_id": -1}},
+            {_GROUP: {"_id": "$enfermedad", "cantidad_casos_activos": {_FIRST: "$cantidad_casos_activos"}, "fecha": {_FIRST: "$fecha"}}},
             {"$project": {"_id": 0, "enfermedad": "$_id", "cantidad_casos_activos": 1, "fecha": 1}},
-            {"$sort": {"enfermedad": 1}},
+            {_SORT: {"enfermedad": 1}},
         ])))
         return DashboardSources(
             semaforo_oficial=TrafficLight(
