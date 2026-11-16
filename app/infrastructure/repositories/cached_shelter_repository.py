@@ -137,7 +137,7 @@ class CachedShelterRepository:
 
             ocupacion = IntradayOccupancy(
                 porcentaje_ocupacion=(
-                    ultima_medicion.get(
+                    snapshot.get(
                         "porcentaje_ocupacion"
                     )
                 ),

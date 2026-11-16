@@ -11,8 +11,10 @@ from app.domain.shelters import (
     DiseaseSummary,
     Intervention,
     IntradayOccupancy,
+    PredictionSummary,
     RiskAnalysis,
     SanitaryConditions,
+    SIRSimulation,
     TrafficLight,
 )
 from app.domain.shelters import (
@@ -133,6 +135,6 @@ class DashboardResponse(ShelterDetailResponse):
     evolucion_epidemiologica: list[DiseaseRecord]
     intervenciones: list[Intervention]
     ultima_actualizacion: datetime | None
-    predicciones: list[None]
-    simulaciones_sir: list[None]
+    predicciones: list[PredictionSummary]
+    simulaciones_sir: list[SIRSimulation]
     datos_no_disponibles: list[str]

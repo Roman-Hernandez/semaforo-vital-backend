@@ -15,6 +15,7 @@ from app.domain.errors import (
     PopulationConflict,
 )
 from app.domain.shelters import (
+    AlertStatistics,
     AnalysisInputs,
     AnalysisPeriod,
     DailyCases,
@@ -29,15 +30,28 @@ from app.domain.shelters import (
     ModelVersion,
     PopulationRecord,
     Preprocessing,
+    ProjectionPeriod,
     RiskAnalysis,
+    RiskDistribution,
     RiskResult,
     SanitaryConditions,
     SanitaryResource,
     Shelter,
     ShelterIndicators,
     ShelterUpdate,
+    SIRInputs,
+    SIRParameters,
+    SIRPoint,
+    SIRPreprocessing,
+    SIRSimulation,
+    SIRState,
     TrafficLight,
 )
+
+_MATCH = "$match"
+_GROUP = "$group"
+_SORT = "$sort"
+_FIRST = "$first"
 
 
 def _plain(value):
@@ -97,6 +111,45 @@ def _population_record(document):
     return PopulationRecord(
         **_trace(document), albergue_id=document["albergue_id"],
         fecha=document["fecha"], poblacion=document["poblacion"],
+    )
+
+
+def _sir_simulation(document) -> SIRSimulation:
+    document = _plain(document)
+    parameters = document["parametros"]
+    initial = parameters["condiciones_iniciales"]
+    inputs = document["datos_entrada"]
+    preprocessing = document["preprocesamiento"]
+    points = [SIRPoint(
+        dia=item["dia"], susceptibles=item["susceptibles"],
+        infectados=item["infectados"], recuperados=item["recuperados"],
+    ) for item in sorted(document["trayectoria"], key=lambda item: item["dia"])]
+    if not points:
+        raise PersistenceError()
+    return SIRSimulation(
+        **_trace(document), albergue_id=document["albergue_id"],
+        fecha_ejecucion=document["fecha_ejecucion"], enfermedad=document["enfermedad"],
+        publica=document["publica"], escenario_id=document.get("escenario_id"),
+        modelo=ModelVersion(nombre=document["modelo"]["nombre"], version=document["modelo"]["version"]),
+        parametros=SIRParameters(
+            beta=parameters["beta"], gamma=parameters["gamma"],
+            condiciones_iniciales=SIRState(
+                susceptibles=initial["susceptibles"], infectados=initial["infectados"],
+                recuperados=initial["recuperados"],
+            ),
+            horizonte_dias=parameters["horizonte_dias"], metodo_numerico=parameters["metodo_numerico"],
+        ),
+        datos_entrada=SIRInputs(
+            historial_poblacion_ids=inputs["historial_poblacion_ids"],
+            casos_enfermedades_ids=inputs["casos_enfermedades_ids"], analisis_ia_id=inputs.get("analisis_ia_id"),
+        ),
+        preprocesamiento=SIRPreprocessing(
+            registros_considerados=preprocessing["registros_considerados"],
+            registros_descartados=preprocessing["registros_descartados"],
+            observaciones=preprocessing.get("observaciones"),
+        ),
+        trayectoria=points,
+        periodo_estimacion=ProjectionPeriod(dia_inicio=points[0].dia, dia_fin=points[-1].dia),
     )
 
 
@@ -172,23 +225,55 @@ class MongoShelterRepository:
     def dashboard_sources(self, shelter_id: str, limit: int) -> DashboardSources:
         scope = {"albergue_id": ObjectId(shelter_id)}
 
-        def latest(collection, date_field):
-            return _plain(self.database[collection].find_one(scope, sort=[(date_field, -1), ("_id", -1)]))
+        def latest(collection, date_field, *, real_only=False):
+            query = {**scope, "escenario_id": None} if real_only else scope
+            return _plain(self.database[collection].find_one(query, sort=[(date_field, -1), ("_id", -1)]))
 
         def history(collection, date_field):
             return _plain(list(self.database[collection].find(scope).sort([(date_field, -1), ("_id", -1)]).limit(limit)))
 
         daily = latest("registros_diarios", "fecha")
         sanitary = latest("condiciones_sanitarias", "fecha")
-        analysis = latest("analisis_ia", "fecha_ejecucion")
+        analysis = latest("analisis_ia", "fecha_ejecucion", real_only=True)
+        official = latest("estados_semaforo", "fecha_calculo")
+        alert_groups = _plain(list(self.database.alertas.aggregate([
+            {_MATCH: scope},
+            {_GROUP: {
+                "_id": "$nivel_riesgo",
+                "cantidad": {"$sum": {"$cond": ["$activa", 1, 0]}},
+                "ultima_actualizacion": {"$max": {"$ifNull": ["$updated_at", "$created_at"]}},
+            }},
+        ])))
+        counts = {"verde": 0, "amarillo": 0, "rojo": 0}
+        for group in alert_groups:
+            counts[group["id"]] = group["cantidad"]
+        alert_dates = [group["ultima_actualizacion"] for group in alert_groups if group.get("ultima_actualizacion")]
+        simulations = list(self.database.predicciones_sir.aggregate([
+            {_MATCH: {**scope, "escenario_id": None}},
+            {_SORT: {"fecha_ejecucion": -1, "_id": -1}},
+            {_GROUP: {"_id": "$enfermedad", "simulation": {_FIRST: "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$simulation"}},
+            {_SORT: {"fecha_ejecucion": -1, "_id": -1}},
+            {"$limit": limit},
+        ]))
         summaries = _plain(list(self.database.casos_enfermedades.aggregate([
-            {"$match": scope},
-            {"$sort": {"fecha": -1, "_id": -1}},
-            {"$group": {"_id": "$enfermedad", "cantidad_casos_activos": {"$first": "$cantidad_casos_activos"}, "fecha": {"$first": "$fecha"}}},
+            {_MATCH: scope},
+            {_SORT: {"fecha": -1, "_id": -1}},
+            {_GROUP: {"_id": "$enfermedad", "cantidad_casos_activos": {_FIRST: "$cantidad_casos_activos"}, "fecha": {_FIRST: "$fecha"}}},
             {"$project": {"_id": 0, "enfermedad": "$_id", "cantidad_casos_activos": 1, "fecha": 1}},
-            {"$sort": {"enfermedad": 1}},
+            {_SORT: {"enfermedad": 1}},
         ])))
         return DashboardSources(
+            semaforo_oficial=TrafficLight(
+                nivel=official["nivel"], codigo=official["codigo"],
+                estado_semaforo_id=official["id"], fecha_calculo=official["fecha_calculo"],
+            ) if official else None,
+            fecha_actualizacion_semaforo=official["created_at"] if official else None,
+            alertas=AlertStatistics(
+                cantidad=sum(counts.values()), por_nivel_riesgo=RiskDistribution(**counts),
+                ultima_actualizacion=max(alert_dates, default=None),
+            ),
+            simulaciones_sir=[_sir_simulation(item) for item in simulations],
             casos_diarios=DailyCases(
                 casos_eda=daily.get("casos_eda"), casos_ira=daily.get("casos_ira"),
                 ultima_actualizacion=daily.get("updated_at") or daily["created_at"],
