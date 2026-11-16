@@ -1,19 +1,28 @@
-from dataclasses import asdict, dataclass, field, fields, replace
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime
 
 from app.domain.errors import ShelterNotFound
 from app.domain.ports.shelter_repository import ShelterRepository
 from app.domain.shelters import (
-    DashboardSources,
+    DailyCases,
+    DiseaseRecord,
+    DiseaseSummary,
+    Intervention,
     IntradayOccupancy,
     Occupancy,
     PopulationRecord,
+    PredictionSummary,
+    RiskAnalysis,
+    RiskDistribution,
+    SanitaryConditions,
     Shelter,
     ShelterIndicators,
     ShelterUpdate,
+    SIRSimulation,
     TrafficLight,
     assigned_shelter,
     occupancy,
+    summarize_simulation,
     validate_population,
 )
 from app.domain.users import User
@@ -41,21 +50,25 @@ class ShelterDetail(PopulationView):
 
 @dataclass(frozen=True, kw_only=True)
 class AlertSummary:
-    cantidad: int | None
+    cantidad: int
+    por_nivel_riesgo: RiskDistribution
     por_prioridad: None = None
 
 
 @dataclass(frozen=True, kw_only=True)
-class DashboardView(ShelterDetail, DashboardSources):
+class DashboardView(ShelterDetail):
     semaforo_vital: TrafficLight | None
     alertas: AlertSummary
     ultima_actualizacion: datetime | None
-    # No module currently produces these results; only empty lists are supported.
-    predicciones: list[None] = field(default_factory=list)
-    simulaciones_sir: list[None] = field(default_factory=list)
-    datos_no_disponibles: list[str] = field(default_factory=lambda: [
-        "alertas_por_prioridad", "predicciones", "simulaciones_sir", "estado_intervenciones",
-    ])
+    casos_diarios: DailyCases | None
+    condiciones_sanitarias: SanitaryConditions | None
+    analisis_ia: RiskAnalysis | None
+    resumen_casos: list[DiseaseSummary]
+    evolucion_epidemiologica: list[DiseaseRecord]
+    intervenciones: list[Intervention]
+    predicciones: list[PredictionSummary]
+    simulaciones_sir: list[SIRSimulation]
+    datos_no_disponibles: list[str]
 
 
 class ShelterService:
@@ -116,23 +129,41 @@ class ShelterService:
         indicators = self.repository.latest_metrics(shelter_id)
         detail = self._detail(user, shelter_id, indicators)
         sources = self.repository.dashboard_sources(shelter_id, limit)
-        risk = indicators.semaforo
+        risk = sources.semaforo_oficial or indicators.semaforo
         descriptions = {"verde": "Riesgo bajo", "amarillo": "Riesgo medio", "rojo": "Riesgo crítico"}
         if risk:
             risk = replace(risk, descripcion=descriptions.get(risk.nivel.lower()))
         records = [
             detail.albergue, detail.ultimo_registro, sources.condiciones_sanitarias,
             sources.analisis_ia, *sources.intervenciones, *sources.evolucion_epidemiologica,
+            *sources.simulaciones_sir,
         ]
         dates = [record.last_updated for record in records if record]
-        if indicators.ultima_actualizacion:
-            dates.append(indicators.ultima_actualizacion)
+        for timestamp in (
+            indicators.ultima_actualizacion, sources.fecha_actualizacion_semaforo,
+            sources.alertas.ultima_actualizacion,
+        ):
+            if timestamp:
+                dates.append(timestamp)
         if sources.casos_diarios and sources.casos_diarios.ultima_actualizacion:
             dates.append(sources.casos_diarios.ultima_actualizacion)
         return DashboardView(
             **{item.name: getattr(detail, item.name) for item in fields(detail)},
-            **{item.name: getattr(sources, item.name) for item in fields(sources)},
             semaforo_vital=risk,
-            alertas=AlertSummary(cantidad=indicators.alertas_activas),
+            alertas=AlertSummary(
+                cantidad=sources.alertas.cantidad,
+                por_nivel_riesgo=sources.alertas.por_nivel_riesgo,
+            ),
+            casos_diarios=sources.casos_diarios,
+            condiciones_sanitarias=sources.condiciones_sanitarias,
+            analisis_ia=sources.analisis_ia,
+            resumen_casos=sources.resumen_casos,
+            evolucion_epidemiologica=sources.evolucion_epidemiologica,
+            intervenciones=sources.intervenciones,
+            simulaciones_sir=sources.simulaciones_sir,
+            predicciones=[summarize_simulation(item) for item in sources.simulaciones_sir],
+            datos_no_disponibles=["alertas_por_prioridad", "estado_intervenciones"] + (
+                [] if sources.simulaciones_sir else ["predicciones", "simulaciones_sir"]
+            ),
             ultima_actualizacion=max(dates, default=None),
         )

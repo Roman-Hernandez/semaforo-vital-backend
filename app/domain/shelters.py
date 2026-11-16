@@ -217,7 +217,103 @@ class DailyCases:
 
 
 @dataclass(frozen=True, kw_only=True)
+class RiskDistribution:
+    verde: int = 0
+    amarillo: int = 0
+    rojo: int = 0
+
+
+@dataclass(frozen=True, kw_only=True)
+class AlertStatistics:
+    cantidad: int = 0
+    por_nivel_riesgo: RiskDistribution = field(default_factory=RiskDistribution)
+    ultima_actualizacion: datetime | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class SIRState:
+    susceptibles: float
+    infectados: float
+    recuperados: float
+
+
+@dataclass(frozen=True, kw_only=True)
+class SIRPoint(SIRState):
+    dia: int
+
+
+@dataclass(frozen=True, kw_only=True)
+class SIRParameters:
+    beta: float
+    gamma: float
+    condiciones_iniciales: SIRState
+    horizonte_dias: int
+    metodo_numerico: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class SIRInputs:
+    historial_poblacion_ids: list[str]
+    casos_enfermedades_ids: list[str]
+    analisis_ia_id: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class SIRPreprocessing:
+    registros_considerados: int
+    registros_descartados: int
+    observaciones: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class ProjectionPeriod:
+    # The storage contract defines relative days, not calendar projection dates.
+    dia_inicio: int
+    dia_fin: int
+
+
+@dataclass(frozen=True, kw_only=True)
+class SIRSimulation(Trace):
+    albergue_id: str
+    fecha_ejecucion: datetime
+    enfermedad: str
+    publica: bool
+    modelo: ModelVersion
+    parametros: SIRParameters
+    datos_entrada: SIRInputs
+    preprocesamiento: SIRPreprocessing
+    trayectoria: list[SIRPoint]
+    periodo_estimacion: ProjectionPeriod
+    escenario_id: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class PredictionSummary:
+    simulacion_id: str
+    enfermedad: str
+    fecha_ejecucion: datetime
+    modelo: ModelVersion
+    periodo_estimacion: ProjectionPeriod
+    resultado_final: SIRPoint
+    pico_infectados: SIRPoint
+
+
+def summarize_simulation(simulation: SIRSimulation) -> PredictionSummary:
+    return PredictionSummary(
+        simulacion_id=simulation.id, enfermedad=simulation.enfermedad,
+        fecha_ejecucion=simulation.fecha_ejecucion, modelo=simulation.modelo,
+        periodo_estimacion=simulation.periodo_estimacion,
+        resultado_final=max(simulation.trayectoria, key=lambda point: point.dia),
+        pico_infectados=max(simulation.trayectoria, key=lambda point: point.infectados),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class DashboardSources:
+    semaforo_oficial: TrafficLight | None = None
+    fecha_actualizacion_semaforo: datetime | None = None
+    alertas: AlertStatistics = field(default_factory=AlertStatistics)
+    simulaciones_sir: list[SIRSimulation] = field(default_factory=list)
     casos_diarios: DailyCases | None = None
     condiciones_sanitarias: SanitaryConditions | None = None
     analisis_ia: RiskAnalysis | None = None

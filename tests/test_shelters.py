@@ -106,7 +106,8 @@ def test_dashboard_without_data_is_explicit_and_private(api):
     assert data["albergue"]["id"] == SHELTER
     assert data["poblacion_actual"] is None
     assert data["semaforo_vital"] is None
-    assert data["alertas"]["cantidad"] is None
+    assert data["alertas"]["cantidad"] == 0
+    assert data["alertas"]["por_nivel_riesgo"] == {"verde": 0, "amarillo": 0, "rojo": 0}
     assert data["predicciones"] == []
     assert "password_hash" not in str(data)
     assert set(repository.calls) == {SHELTER}
@@ -227,18 +228,23 @@ def test_api_persistence_errors_are_controlled(api, error, code):
 
 def test_mongo_dashboard_reads_are_scoped_to_the_assigned_shelter():
     database = MagicMock()
+    database.__getitem__.side_effect = lambda name: getattr(database, name)
     repository = MongoShelterRepository(database)
-    for collection in ("condiciones_sanitarias", "analisis_ia", "registros_diarios"):
+    for collection in ("condiciones_sanitarias", "analisis_ia", "registros_diarios", "estados_semaforo"):
         database[collection].find_one.return_value = None
     repository.dashboard_sources(SHELTER, 30)
-    for collection in ("condiciones_sanitarias", "analisis_ia", "registros_diarios"):
-        query = database[collection].find_one.call_args.args[0]
-        assert query == {"albergue_id": ObjectId(SHELTER)}
+    scope = {"albergue_id": ObjectId(SHELTER)}
+    for collection in ("condiciones_sanitarias", "registros_diarios", "estados_semaforo"):
+        assert database[collection].find_one.call_args.args[0] == scope
+    assert database.analisis_ia.find_one.call_args.args[0] == {**scope, "escenario_id": None}
     for collection in ("casos_enfermedades", "intervenciones"):
-        query = database[collection].find.call_args.args[0]
-        assert query == {"albergue_id": ObjectId(SHELTER)}
-    pipeline = database.casos_enfermedades.aggregate.call_args.args[0]
-    assert pipeline[0] == {"$match": {"albergue_id": ObjectId(SHELTER)}}
+        assert database[collection].find.call_args.args[0] == scope
+    for collection in ("casos_enfermedades", "alertas"):
+        assert database[collection].aggregate.call_args.args[0][0] == {"$match": scope}
+    simulations = database.predicciones_sir.aggregate.call_args.args[0]
+    assert simulations[0] == {"$match": {**scope, "escenario_id": None}}
+    assert simulations[2]["$group"]["_id"] == "$enfermedad"
+    assert simulations[-1] == {"$limit": 30}
 
 
 @pytest.mark.parametrize("coordinates", [[181, 0], [0, 91], [0], [0, 0, 0]])
@@ -358,6 +364,7 @@ def test_dashboard_maps_all_stored_sources_to_explicit_response_types(api):
     database.albergues.find_one.return_value = shelter_doc
     database.historial_poblacion.find.return_value.sort.return_value.skip.return_value.limit.return_value = []
     database.metricas_albergue.find_one.return_value = None
+    database.estados_semaforo.find_one.return_value = None
     trace = {"_id": ObjectId(), "albergue_id": ObjectId(SHELTER), "created_at": NOW, "registrado_por": ObjectId(USER.id)}
     database["registros_diarios"].find_one.return_value = {**trace, "casos_eda": 3, "casos_ira": 2}
     database["condiciones_sanitarias"].find_one.return_value = {
@@ -385,6 +392,29 @@ def test_dashboard_maps_all_stored_sources_to_explicit_response_types(api):
         **trace, "fecha_intervencion": NOW, "tipo_intervencion": "agua",
         "descripcion": "Entrega de agua", "fuente_datos": "reporte",
     }]
+    official_id = ObjectId()
+    database.estados_semaforo.find_one.return_value = {
+        **trace, "_id": official_id, "nivel": "rojo", "codigo": 3, "fecha_calculo": NOW,
+    }
+    database.alertas.aggregate.return_value = [
+        {"_id": "rojo", "cantidad": 2, "ultima_actualizacion": NOW},
+        {"_id": "amarillo", "cantidad": 1, "ultima_actualizacion": NOW},
+    ]
+    simulation_id = ObjectId()
+    database.predicciones_sir.aggregate.return_value = [{
+        **trace, "_id": simulation_id, "fecha_ejecucion": NOW, "enfermedad": "EDA", "publica": False,
+        "modelo": {"nombre": "SIR", "version": "1"},
+        "parametros": {"beta": 0.2, "gamma": 0.1, "horizonte_dias": 2, "metodo_numerico": "RK4",
+                       "condiciones_iniciales": {"susceptibles": 90, "infectados": 10, "recuperados": 0}},
+        "datos_entrada": {"historial_poblacion_ids": [], "casos_enfermedades_ids": []},
+        "preprocesamiento": {"registros_considerados": 1, "registros_descartados": 0},
+        "trayectoria": [
+            {"dia": 0, "susceptibles": 90, "infectados": 10, "recuperados": 0},
+            {"dia": 1, "susceptibles": 85, "infectados": 12, "recuperados": 3},
+            {"dia": 2, "susceptibles": 84, "infectados": 11, "recuperados": 5},
+        ],
+        "private_notes": "never expose",
+    }]
     app.dependency_overrides[get_shelter_service] = lambda: ShelterService(MongoShelterRepository(database))
     response = client.get("/api/v1/mi-albergue/dashboard")
     assert response.status_code == 200
@@ -397,6 +427,20 @@ def test_dashboard_maps_all_stored_sources_to_explicit_response_types(api):
     assert data["resumen_casos"][0]["cantidad_casos_activos"] == 3
     assert data["evolucion_epidemiologica"][0]["enfermedad"] == "EDA"
     assert data["intervenciones"][0]["estado"] is None
+    assert data["alertas"]["cantidad"] == 3
+    assert data["alertas"]["por_nivel_riesgo"] == {"verde": 0, "amarillo": 1, "rojo": 2}
+    assert data["alertas"]["por_prioridad"] is None
+    assert data["semaforo_vital"]["estado_semaforo_id"] == str(official_id)
+    assert data["semaforo_vital"]["descripcion"] == "Riesgo crítico"
+    assert data["simulaciones_sir"][0]["id"] == str(simulation_id)
+    assert data["simulaciones_sir"][0]["publica"] is False
+    prediction = data["predicciones"][0]
+    assert prediction["simulacion_id"] == str(simulation_id)
+    assert prediction["periodo_estimacion"] == {"dia_inicio": 0, "dia_fin": 2}
+    assert prediction["pico_infectados"]["dia"] == 1
+    assert prediction["resultado_final"]["infectados"] == 11
+    assert "predicciones" not in data["datos_no_disponibles"]
+    assert "simulaciones_sir" not in data["datos_no_disponibles"]
     assert "private_notes" not in response.text
     assert data["ultima_actualizacion"] == NOW.isoformat().replace("+00:00", "Z")
 
@@ -421,3 +465,57 @@ def test_cached_repository_uses_computed_occupancy(monkeypatch, computed):
     )
     repository = CachedShelterRepository(MagicMock(), MagicMock(), None)
     assert repository.latest_metrics(SHELTER).ocupacion.porcentaje_ocupacion == computed
+
+
+def test_dashboard_prefers_official_state_and_live_alerts_over_cached_snapshot():
+    from app.domain.shelters import AlertStatistics, RiskDistribution
+
+    repository = MemoryShelterRepository()
+    repository.latest_metrics = lambda shelter_id: ShelterIndicators(
+        semaforo=TrafficLight(nivel="verde"), alertas_activas=99,
+    )
+    repository.dashboard_sources = lambda shelter_id, limit: DashboardSources(
+        semaforo_oficial=TrafficLight(nivel="rojo", estado_semaforo_id="official", fecha_calculo=NOW),
+        fecha_actualizacion_semaforo=NOW,
+        alertas=AlertStatistics(cantidad=2, por_nivel_riesgo=RiskDistribution(rojo=2)),
+    )
+    result = ShelterService(repository).dashboard(USER, 30)
+    assert result.semaforo_vital.nivel == "rojo"
+    assert result.semaforo_vital.estado_semaforo_id == "official"
+    assert result.alertas.cantidad == 2
+    assert result.alertas.por_nivel_riesgo.rojo == 2
+
+
+def test_dashboard_reports_zero_active_alerts_instead_of_stale_snapshot_count():
+    repository = MemoryShelterRepository()
+    repository.latest_metrics = lambda shelter_id: ShelterIndicators(alertas_activas=99)
+    result = ShelterService(repository).dashboard(USER, 30)
+    assert result.alertas.cantidad == 0
+    assert "predicciones" in result.datos_no_disponibles
+    assert result.predicciones == []
+
+
+def test_dashboard_update_time_includes_alert_changes():
+    from datetime import timedelta
+
+    from app.domain.shelters import AlertStatistics
+
+    repository = MemoryShelterRepository()
+    changed = NOW + timedelta(hours=1)
+    repository.dashboard_sources = lambda shelter_id, limit: DashboardSources(
+        alertas=AlertStatistics(ultima_actualizacion=changed),
+    )
+    assert ShelterService(repository).dashboard(USER, 30).ultima_actualizacion == changed
+
+
+def test_empty_persisted_sir_trajectory_returns_a_controlled_persistence_error():
+    database = MagicMock()
+    database.__getitem__.side_effect = lambda name: getattr(database, name)
+    for name in ("registros_diarios", "condiciones_sanitarias", "analisis_ia", "estados_semaforo"):
+        database[name].find_one.return_value = None
+    database.predicciones_sir.aggregate.return_value = [{
+        "parametros": {"condiciones_iniciales": {}}, "datos_entrada": {}, "preprocesamiento": {}, "trayectoria": [],
+    }]
+    repository = MongoShelterRepository(database)
+    with pytest.raises(PersistenceError):
+        repository.dashboard_sources(SHELTER, 30)
