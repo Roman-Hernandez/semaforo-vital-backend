@@ -399,3 +399,25 @@ def test_dashboard_maps_all_stored_sources_to_explicit_response_types(api):
     assert data["intervenciones"][0]["estado"] is None
     assert "private_notes" not in response.text
     assert data["ultima_actualizacion"] == NOW.isoformat().replace("+00:00", "Z")
+
+
+@pytest.mark.parametrize("computed", [80.0, 0.0, None])
+def test_cached_repository_uses_computed_occupancy(monkeypatch, computed):
+    from app.infrastructure.repositories.cached_shelter_repository import (
+        CachedShelterRepository,
+    )
+
+    snapshot = {
+        "porcentaje_ocupacion": computed,
+        "ultima_medicion": {
+            "porcentaje_ocupacion": 20.0,
+            "personas_alojadas": 2,
+            "fecha_hora": NOW.isoformat(),
+        },
+    }
+    monkeypatch.setattr(
+        "app.infrastructure.repositories.cached_shelter_repository.get_semaforo_snapshot",
+        lambda *args: snapshot,
+    )
+    repository = CachedShelterRepository(MagicMock(), MagicMock(), None)
+    assert repository.latest_metrics(SHELTER).ocupacion.porcentaje_ocupacion == computed
