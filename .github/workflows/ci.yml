@@ -151,3 +151,32 @@ jobs:
             -Dsonar.python.coverage.reportPaths=coverage.xml
             -Dsonar.exclusions=**/__pycache__/**
             -Dsonar.qualitygate.wait=true
+
+      - name: Show SonarQube failure details
+        if: ${{ failure() && env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != '' }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          def read_api(path, **query):
+              url = os.environ["SONAR_HOST_URL"].rstrip("/") + path + "?" + urlencode(query)
+              request = Request(url, headers={"Authorization": "Bearer " + os.environ["SONAR_TOKEN"]})
+              with urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          try:
+              project = os.environ["GITHUB_REPOSITORY"].split("/")[-1]
+              gate = read_api("/api/qualitygates/project_status", projectKey=project)["projectStatus"]
+              print("Quality Gate:", gate["status"])
+              for condition in gate.get("conditions", []):
+                  print(json.dumps(condition))
+              issues = read_api("/api/issues/search", componentKeys=project, resolved="false", ps=100)
+              for issue in issues.get("issues", []):
+                  print(json.dumps({key: issue.get(key) for key in ("rule", "component", "line", "message")}))
+          except Exception as error:
+              print("SonarQube diagnostic unavailable:", type(error).__name__)
+          PY
