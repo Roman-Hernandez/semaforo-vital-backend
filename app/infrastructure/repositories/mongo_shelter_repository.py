@@ -1,12 +1,11 @@
 from dataclasses import asdict
 from datetime import UTC, datetime
-from functools import wraps
 
 from bson import ObjectId
 from bson.decimal128 import Decimal128
 from pymongo import ReturnDocument
 from pymongo.database import Database
-from pymongo.errors import DuplicateKeyError, PyMongoError
+from pymongo.errors import DuplicateKeyError
 
 from app.domain.errors import (
     InvalidPopulation,
@@ -14,6 +13,7 @@ from app.domain.errors import (
     PersistenceError,
     PopulationConflict,
 )
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.shelters import (
     AlertStatistics,
     AnalysisInputs,
@@ -31,6 +31,8 @@ from app.domain.shelters import (
     PopulationRecord,
     Preprocessing,
     ProjectionPeriod,
+    RecordInput,
+    RecordKind,
     RiskAnalysis,
     RiskDistribution,
     RiskResult,
@@ -38,6 +40,7 @@ from app.domain.shelters import (
     SanitaryResource,
     Shelter,
     ShelterIndicators,
+    ShelterRecord,
     ShelterUpdate,
     SIRInputs,
     SIRParameters,
@@ -47,11 +50,18 @@ from app.domain.shelters import (
     SIRState,
     TrafficLight,
 )
+from app.infrastructure.database.errors import persistence_guard as _persistence
+from app.infrastructure.database.pagination import (
+    filtered_query,
+    paginate_aggregate,
+    paginate_find,
+)
 
 _MATCH = "$match"
 _GROUP = "$group"
 _SORT = "$sort"
 _FIRST = "$first"
+_DISEASE_FIELD = "$enfermedad"
 
 
 def _plain(value):
@@ -68,15 +78,6 @@ def _plain(value):
         return [_plain(item) for item in value]
     return value
 
-
-def _persistence(operation):
-    @wraps(operation)
-    def guarded(*args, **kwargs):
-        try:
-            return operation(*args, **kwargs)
-        except PyMongoError as exc:
-            raise PersistenceError() from exc
-    return guarded
 
 
 def _trace(document):
@@ -112,6 +113,36 @@ def _population_record(document):
         **_trace(document), albergue_id=document["albergue_id"],
         fecha=document["fecha"], poblacion=document["poblacion"],
     )
+
+
+def _sanitary(document):
+    document = _plain(document)
+    return SanitaryConditions(
+        **_trace(document), albergue_id=document["albergue_id"], fecha=document["fecha"],
+        agua_potable_disponible=document["agua_potable_disponible"],
+        banos_disponibles=document["banos_disponibles"], estado_higiene=document["estado_higiene"],
+        estado_saneamiento=document["estado_saneamiento"], fuente_datos=document["fuente_datos"],
+        observaciones=document.get("observaciones"),
+        otros_recursos_sanitarios=[SanitaryResource(**item) for item in document.get("otros_recursos_sanitarios", [])],
+    )
+
+
+def _disease(document):
+    document = _plain(document)
+    return DiseaseRecord(**_trace(document), cantidad_recuperados=document.get("cantidad_recuperados"), albergue_id=document["albergue_id"], fecha=document["fecha"],
+                         enfermedad=document["enfermedad"], cantidad_casos_activos=document["cantidad_casos_activos"],
+                         fuente_datos=document["fuente_datos"], observaciones=document.get("observaciones"))
+
+
+def _intervention(document):
+    document = _plain(document)
+    return Intervention(**_trace(document), albergue_id=document["albergue_id"],
+                        fecha_intervencion=document["fecha_intervencion"], tipo_intervencion=document["tipo_intervencion"],
+                        descripcion=document["descripcion"], fuente_datos=document["fuente_datos"],
+                        observaciones=document.get("observaciones"))
+
+
+_RECORD_MAPPERS = {RecordKind.SANITARY: _sanitary, RecordKind.DISEASE: _disease, RecordKind.INTERVENTION: _intervention}
 
 
 def _sir_simulation(document) -> SIRSimulation:
@@ -158,7 +189,67 @@ class MongoShelterRepository:
         self.database = database
 
     @_persistence
+    def page_records(self, shelter_id: str, kind: RecordKind, paging: Pagination, filters: ListFilters) -> PaginatedResult[ShelterRecord]:
+        date_field = "fecha_intervencion" if kind == RecordKind.INTERVENTION else "fecha"
+        fields = {RecordKind.DISEASE: ("enfermedad",),
+                  RecordKind.SANITARY: ("estado_higiene", "estado_saneamiento", "observaciones"),
+                  RecordKind.INTERVENTION: ("tipo_intervencion", "descripcion", "observaciones")}[kind]
+        query = filtered_query({"albergue_id": ObjectId(shelter_id)}, filters, fields, date_field)
+        return paginate_find(self.database[kind.value], query, paging, [(date_field, -1), ("_id", -1)], _RECORD_MAPPERS[kind])
+
+    @_persistence
+    def page_population(self, shelter_id: str, paging: Pagination, filters: ListFilters) -> PaginatedResult[PopulationRecord]:
+        query = filtered_query({"albergue_id": ObjectId(shelter_id)}, filters, (), "fecha")
+        return paginate_find(self.database.historial_poblacion, query, paging,
+                             [("fecha", -1), ("_id", -1)], _population_record)
+
+    @_persistence
+    def page_sir_diseases(self, shelter_id: str, since: datetime, until: datetime,
+                          paging: Pagination, disease: str | None = None) -> PaginatedResult[str]:
+        pipeline = [{_MATCH: {"albergue_id": ObjectId(shelter_id), "fecha": {"$gte": since, "$lte": until}}},
+            {"$group": {"_id": {"$toLower": {"$trim": {"input": _DISEASE_FIELD}}}, "nombre": {"$first": _DISEASE_FIELD}}}]
+        if disease:
+            pipeline.append({_MATCH: {"_id": disease.strip().casefold()}})
+        pipeline.append({"$sort": {"_id": 1}})
+        return paginate_aggregate(self.database.casos_enfermedades, pipeline, paging, lambda row: row["nombre"].strip())
+
+    @_persistence
+    def list_records(self, shelter_id: str, kind: RecordKind, limit: int, offset: int) -> list[ShelterRecord]:
+        date_field = "fecha_intervencion" if kind == RecordKind.INTERVENTION else "fecha"
+        cursor = self.database[kind.value].find({"albergue_id": ObjectId(shelter_id)})
+        return [_RECORD_MAPPERS[kind](doc) for doc in cursor.sort([(date_field, -1), ("_id", -1)]).skip(offset).limit(limit)]
+
+    @_persistence
+    def save_record(self, shelter_id: str, kind: RecordKind, command: RecordInput,
+                    user_id: str, now: datetime, record_id: str | None = None) -> ShelterRecord | None:
+        collection = self.database[kind.value]
+        values = {key: value for key, value in asdict(command).items() if value is not None}
+        # BSON validators reject null optional fields, including nested resource observations.
+        if "otros_recursos_sanitarios" in values:
+            values["otros_recursos_sanitarios"] = [
+                {key: value for key, value in resource.items() if value is not None}
+                for resource in values["otros_recursos_sanitarios"]
+            ]
+        if record_id is None:
+            document = {**values, "albergue_id": ObjectId(shelter_id),
+                        "registrado_por": ObjectId(user_id), "created_at": now}
+            collection.insert_one(document)
+        else:
+            if not ObjectId.is_valid(record_id):
+                return None
+            update = {"$set": {**values, "updated_by": ObjectId(user_id), "updated_at": now}}
+            if command.observaciones is None:
+                update["$unset"] = {"observaciones": ""}
+            document = collection.find_one_and_update(
+                {"_id": ObjectId(record_id), "albergue_id": ObjectId(shelter_id)},
+                update, return_document=ReturnDocument.AFTER,
+            )
+        return _RECORD_MAPPERS[kind](document) if document else None
+
+    @_persistence
     def find(self, shelter_id: str) -> Shelter | None:
+        if not ObjectId.is_valid(shelter_id):
+            return None
         return _shelter(self.database.albergues.find_one({"_id": ObjectId(shelter_id)}))
 
     @_persistence
@@ -222,6 +313,17 @@ class MongoShelterRepository:
         )
 
     @_persistence
+    def sir_history(self, shelter_id: str, since: datetime, until: datetime, diseases: list[str] | None = None) -> list[DiseaseRecord]:
+        # Historial acotado por fecha, no por número de registros: no omite enfermedades con menos entradas.
+        query = {"albergue_id": ObjectId(shelter_id), "fecha": {"$gte": since, "$lte": until}}
+        if diseases is not None:
+            if not diseases:
+                return []
+            query["$expr"] = {"$in": [{"$toLower": {"$trim": {"input": _DISEASE_FIELD}}}, [name.casefold() for name in diseases]]}
+        documents = self.database.casos_enfermedades.find(query).sort([("fecha", 1), ("updated_at", 1), ("created_at", 1), ("_id", 1)])
+        return [_disease(document) for document in documents]
+
+    @_persistence
     def dashboard_sources(self, shelter_id: str, limit: int) -> DashboardSources:
         scope = {"albergue_id": ObjectId(shelter_id)}
 
@@ -251,7 +353,7 @@ class MongoShelterRepository:
         simulations = list(self.database.predicciones_sir.aggregate([
             {_MATCH: {**scope, "escenario_id": None}},
             {_SORT: {"fecha_ejecucion": -1, "_id": -1}},
-            {_GROUP: {"_id": "$enfermedad", "simulation": {_FIRST: "$$ROOT"}}},
+            {_GROUP: {"_id": _DISEASE_FIELD, "simulation": {_FIRST: "$$ROOT"}}},
             {"$replaceRoot": {"newRoot": "$simulation"}},
             {_SORT: {"fecha_ejecucion": -1, "_id": -1}},
             {"$limit": limit},
@@ -259,7 +361,7 @@ class MongoShelterRepository:
         summaries = _plain(list(self.database.casos_enfermedades.aggregate([
             {_MATCH: scope},
             {_SORT: {"fecha": -1, "_id": -1}},
-            {_GROUP: {"_id": "$enfermedad", "cantidad_casos_activos": {_FIRST: "$cantidad_casos_activos"}, "fecha": {_FIRST: "$fecha"}}},
+            {_GROUP: {"_id": _DISEASE_FIELD, "cantidad_casos_activos": {_FIRST: "$cantidad_casos_activos"}, "fecha": {_FIRST: "$fecha"}}},
             {"$project": {"_id": 0, "enfermedad": "$_id", "cantidad_casos_activos": 1, "fecha": 1}},
             {_SORT: {"enfermedad": 1}},
         ])))
@@ -278,16 +380,7 @@ class MongoShelterRepository:
                 casos_eda=daily.get("casos_eda"), casos_ira=daily.get("casos_ira"),
                 ultima_actualizacion=daily.get("updated_at") or daily["created_at"],
             ) if daily else None,
-            condiciones_sanitarias=SanitaryConditions(
-                **_trace(sanitary), albergue_id=sanitary["albergue_id"], fecha=sanitary["fecha"],
-                agua_potable_disponible=sanitary["agua_potable_disponible"],
-                banos_disponibles=sanitary["banos_disponibles"], estado_higiene=sanitary["estado_higiene"],
-                estado_saneamiento=sanitary["estado_saneamiento"], fuente_datos=sanitary["fuente_datos"],
-                observaciones=sanitary.get("observaciones"),
-                otros_recursos_sanitarios=[SanitaryResource(
-                    nombre=item["nombre"], cantidad=item["cantidad"], observacion=item.get("observacion"),
-                ) for item in sanitary.get("otros_recursos_sanitarios", [])],
-            ) if sanitary else None,
+            condiciones_sanitarias=_sanitary(sanitary) if sanitary else None,
             analisis_ia=RiskAnalysis(
                 **_trace(analysis), albergue_id=analysis["albergue_id"],
                 fecha_ejecucion=analysis["fecha_ejecucion"], escenario_id=analysis.get("escenario_id"),
@@ -317,14 +410,6 @@ class MongoShelterRepository:
             resumen_casos=[DiseaseSummary(
                 enfermedad=doc["enfermedad"], cantidad_casos_activos=doc["cantidad_casos_activos"], fecha=doc["fecha"],
             ) for doc in summaries],
-            evolucion_epidemiologica=[DiseaseRecord(
-                **_trace(doc), albergue_id=doc["albergue_id"], fecha=doc["fecha"], enfermedad=doc["enfermedad"],
-                cantidad_casos_activos=doc["cantidad_casos_activos"], fuente_datos=doc["fuente_datos"],
-                observaciones=doc.get("observaciones"),
-            ) for doc in history("casos_enfermedades", "fecha")],
-            intervenciones=[Intervention(
-                **_trace(doc), albergue_id=doc["albergue_id"], fecha_intervencion=doc["fecha_intervencion"],
-                tipo_intervencion=doc["tipo_intervencion"], descripcion=doc["descripcion"],
-                fuente_datos=doc["fuente_datos"], observaciones=doc.get("observaciones"),
-            ) for doc in history("intervenciones", "fecha_intervencion")],
+            evolucion_epidemiologica=[_disease(doc) for doc in history("casos_enfermedades", "fecha")],
+            intervenciones=[_intervention(doc) for doc in history("intervenciones", "fecha_intervencion")],
         )

@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 
 from app.domain.errors import (
     InvalidPopulation,
@@ -55,6 +56,9 @@ class Shelter(Trace):
     capacidad_instalada: int
     activo: bool
     fecha: datetime
+    administrador: str | None = None
+    poblacion_actual: int | None = None
+    nivel_riesgo: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -141,6 +145,7 @@ class DiseaseSummary:
 
 @dataclass(frozen=True, kw_only=True)
 class DiseaseRecord(Trace, DiseaseSummary):
+    cantidad_recuperados: int | None = None
     albergue_id: str
     fuente_datos: str
     observaciones: str | None = None
@@ -342,3 +347,44 @@ def occupancy(capacity: int, population: int | None) -> Occupancy:
         ),
         cupos_disponibles=max(capacity - population, 0) if population is not None else None,
     )
+
+
+class RecordKind(StrEnum):
+    SANITARY = "condiciones_sanitarias"
+    DISEASE = "casos_enfermedades"
+    INTERVENTION = "intervenciones"
+
+
+@dataclass(frozen=True, kw_only=True)
+class SanitaryInput:
+    fecha: datetime
+    agua_potable_disponible: bool
+    banos_disponibles: int
+    estado_higiene: str
+    estado_saneamiento: str
+    fuente_datos: str
+    otros_recursos_sanitarios: list[SanitaryResource] = field(default_factory=list)
+    observaciones: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class DiseaseInput:
+    cantidad_recuperados: int | None = None
+    fecha: datetime
+    enfermedad: str
+    cantidad_casos_activos: int
+    fuente_datos: str
+    observaciones: str | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class InterventionInput:
+    fecha_intervencion: datetime
+    tipo_intervencion: str
+    descripcion: str
+    fuente_datos: str
+    observaciones: str | None = None
+
+
+RecordInput = SanitaryInput | DiseaseInput | InterventionInput
+ShelterRecord = SanitaryConditions | DiseaseRecord | Intervention

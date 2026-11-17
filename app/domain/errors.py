@@ -59,3 +59,15 @@ class DuplicateShelterCode(ApplicationError):
 
 class ShelterInactive(ApplicationError):
     pass
+
+
+class RecordNotFound(ApplicationError):
+    pass
+
+
+class UserNotFound(ApplicationError):
+    pass
+
+
+class DuplicateUserEmail(ApplicationError):
+    pass

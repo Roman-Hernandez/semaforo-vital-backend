@@ -97,6 +97,9 @@ class TraceResponse(BaseModel):
 
 
 class ShelterResponse(TraceResponse):
+    administrador: str | None = None
+    poblacion_actual: int | None = None
+    nivel_riesgo: Literal["verde", "amarillo", "rojo"] | None = None
     codigo_albergue: str
     nombre: str
     ubicacion: DomainLocation

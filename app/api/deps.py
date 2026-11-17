@@ -7,12 +7,15 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pymongo.database import Database
 from redis import Redis
 
+from app.application.administrators import AdministratorService
 from app.application.auth import (
     AuthenticateUserUseCase,
     AuthToken,
     ResolveUserUseCase,
 )
+from app.application.public_shelters import PublicShelterService
 from app.application.shelters import ShelterService
+from app.application.sir import SIRService
 from app.core.config import settings
 from app.domain.errors import InsufficientPermissions, NotAuthenticated
 from app.domain.ports.albergue_repository import AlbergueRepository
@@ -32,7 +35,7 @@ from app.infrastructure.repositories.mongo_shelter_repository import (
 from app.infrastructure.repositories.mongo_user_repository import (
     MongoUserRepository,
 )
-from app.infrastructure.security.tokens import JwtTokens, verify_password
+from app.infrastructure.security.tokens import JwtTokens, hash_password, verify_password
 
 http_bearer = HTTPBearer(
     auto_error=False
@@ -190,3 +193,19 @@ def get_shelter_service(
     return ShelterService(
         cached_repository
     )
+
+def get_administrator_service(
+    users: Annotated[UserRepository, Depends(get_user_repository)],
+    shelters: Annotated[AlbergueRepository, Depends(get_albergue_repository)],
+) -> AdministratorService:
+    return AdministratorService(users, shelters, hash_password)
+
+
+def get_public_shelter_service(
+    repository: Annotated[AlbergueRepository, Depends(get_albergue_repository)],
+) -> PublicShelterService:
+    return PublicShelterService(repository)
+
+
+def get_sir_service(shelters: Annotated[ShelterService, Depends(get_shelter_service)]) -> SIRService:
+    return SIRService(shelters.repository)

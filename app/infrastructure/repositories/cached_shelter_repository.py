@@ -3,13 +3,18 @@ from datetime import datetime
 from pymongo.database import Database
 from redis import Redis
 
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.ports.shelter_repository import ShelterRepository
 from app.domain.shelters import (
     DashboardSources,
+    DiseaseRecord,
     IntradayOccupancy,
     PopulationRecord,
+    RecordInput,
+    RecordKind,
     Shelter,
     ShelterIndicators,
+    ShelterRecord,
     ShelterUpdate,
     TrafficLight,
 )
@@ -53,6 +58,16 @@ class CachedShelterRepository:
         self.repository = repository
         self.database = database
         self.redis_client = redis_client
+
+    def list_records(self, shelter_id: str, kind: RecordKind, limit: int, offset: int) -> list[ShelterRecord]:
+        return self.repository.list_records(shelter_id, kind, limit, offset)
+
+    def save_record(self, shelter_id: str, kind: RecordKind, command: RecordInput,
+                    user_id: str, now: datetime, record_id: str | None = None) -> ShelterRecord | None:
+        result = self.repository.save_record(shelter_id, kind, command, user_id, now, record_id)
+        if result is not None:
+            invalidate_semaforo_snapshot(self.redis_client, shelter_id)
+        return result
 
     def find(
         self,
@@ -189,6 +204,9 @@ class CachedShelterRepository:
             ),
         )
 
+    def sir_history(self, shelter_id: str, since: datetime, until: datetime, diseases: list[str] | None = None) -> list[DiseaseRecord]:
+        return self.repository.sir_history(shelter_id, since, until, diseases)
+
     def dashboard_sources(
         self,
         shelter_id: str,
@@ -198,3 +216,13 @@ class CachedShelterRepository:
             shelter_id,
             limit,
         )
+
+    def page_records(self, shelter_id: str, kind: RecordKind, paging: Pagination, filters: ListFilters) -> PaginatedResult[ShelterRecord]:
+        return self.repository.page_records(shelter_id, kind, paging, filters)
+
+    def page_population(self, shelter_id: str, paging: Pagination, filters: ListFilters) -> PaginatedResult[PopulationRecord]:
+        return self.repository.page_population(shelter_id, paging, filters)
+
+    def page_sir_diseases(self, shelter_id: str, since: datetime, until: datetime,
+                          paging: Pagination, disease: str | None = None) -> PaginatedResult[str]:
+        return self.repository.page_sir_diseases(shelter_id, since, until, paging, disease)

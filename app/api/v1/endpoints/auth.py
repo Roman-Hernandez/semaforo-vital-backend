@@ -4,9 +4,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field, SecretStr
 
-from app.api.deps import get_auth_use_case
+from app.api.administrator_schemas import UserResponse
+from app.api.deps import get_auth_use_case, get_current_user
 from app.api.errors import ERROR_RESPONSES
 from app.application.auth import AuthenticateUserUseCase
+from app.domain.users import User
 
 router = APIRouter(prefix="/auth", tags=["authentication"], responses=ERROR_RESPONSES)
 
@@ -28,3 +30,8 @@ def login(
 ):
     token = use_case.execute(payload.email, payload.password.get_secret_value())
     return asdict(token)
+
+
+@router.get("/me", response_model=UserResponse)
+def current_user(user: Annotated[User, Depends(get_current_user)]):
+    return user

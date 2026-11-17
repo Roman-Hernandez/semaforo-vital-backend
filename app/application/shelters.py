@@ -1,7 +1,13 @@
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime
 
-from app.domain.errors import ShelterNotFound
+from app.domain.errors import (
+    InsufficientPermissions,
+    RecordNotFound,
+    ShelterInactive,
+    ShelterNotFound,
+)
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.ports.shelter_repository import ShelterRepository
 from app.domain.shelters import (
     DailyCases,
@@ -12,11 +18,14 @@ from app.domain.shelters import (
     Occupancy,
     PopulationRecord,
     PredictionSummary,
+    RecordInput,
+    RecordKind,
     RiskAnalysis,
     RiskDistribution,
     SanitaryConditions,
     Shelter,
     ShelterIndicators,
+    ShelterRecord,
     ShelterUpdate,
     SIRSimulation,
     TrafficLight,
@@ -25,7 +34,7 @@ from app.domain.shelters import (
     summarize_simulation,
     validate_population,
 )
-from app.domain.users import User
+from app.domain.users import User, UserRole
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -75,6 +84,40 @@ class ShelterService:
     def __init__(self, repository: ShelterRepository):
         self.repository = repository
 
+    def _shelter_scope(self, user: User, shelter_id: str | None, *, write: bool = False) -> str:
+        if shelter_id is None:
+            shelter_id = assigned_shelter(user)
+        elif not user.active or user.role != UserRole.SUPER_ADMIN:
+            raise InsufficientPermissions()
+        shelter = self.repository.find(shelter_id)
+        if shelter is None:
+            raise ShelterNotFound()
+        if write and not shelter.activo:
+            raise ShelterInactive()
+        return shelter_id
+
+    def records_page(self, user: User, kind: RecordKind, paging: Pagination, filters: ListFilters,
+                     shelter_id: str | None = None) -> PaginatedResult[ShelterRecord]:
+        scope = self._shelter_scope(user, shelter_id)
+        return self.repository.page_records(scope, kind, paging, filters)
+
+    def population_page(self, user: User, paging: Pagination, filters: ListFilters) -> PaginatedResult[PopulationRecord]:
+        scope = self._shelter_scope(user, None)
+        return self.repository.page_population(scope, paging, filters)
+
+    def records(self, user: User, kind: RecordKind, limit: int, offset: int,
+                shelter_id: str | None = None) -> list[ShelterRecord]:
+        scope = self._shelter_scope(user, shelter_id)
+        return self.repository.list_records(scope, kind, limit, offset)
+
+    def save_record(self, user: User, kind: RecordKind, command: RecordInput, now: datetime,
+                    record_id: str | None = None) -> ShelterRecord:
+        scope = self._shelter_scope(user, None, write=True)
+        result = self.repository.save_record(scope, kind, command, user.id, now, record_id)
+        if result is None:
+            raise RecordNotFound()
+        return result
+
     def detail(self, user: User) -> ShelterDetail:
         shelter_id = assigned_shelter(user)
         return self._detail(user, shelter_id, self.repository.latest_metrics(shelter_id))
@@ -104,7 +147,7 @@ class ShelterService:
         return PopulationView(**{item.name: getattr(detail, item.name) for item in fields(PopulationView)})
 
     def update(self, user: User, changes: ShelterUpdate, now: datetime) -> Shelter:
-        result = self.repository.update(assigned_shelter(user), changes, user.id, now)
+        result = self.repository.update(self._shelter_scope(user, None, write=True), changes, user.id, now)
         if result is None:
             raise ShelterNotFound()
         return result
@@ -118,10 +161,8 @@ class ShelterService:
     def save_population(
         self, user: User, day: datetime, population: int, now: datetime,
     ) -> PopulationRecord:
-        shelter_id = assigned_shelter(user)
+        shelter_id = self._shelter_scope(user, None, write=True)
         validate_population(population)
-        if self.repository.find(shelter_id) is None:
-            raise ShelterNotFound()
         return self.repository.save_population(shelter_id, user.id, day, population, now)
 
     def dashboard(self, user: User, limit: int) -> DashboardView:
