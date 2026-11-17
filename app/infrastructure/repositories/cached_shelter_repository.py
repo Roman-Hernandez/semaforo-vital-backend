@@ -3,7 +3,7 @@ from datetime import datetime
 from pymongo.database import Database
 from redis import Redis
 
-from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.ports.shelter_repository import ShelterRepository
 from app.domain.shelters import (
     DashboardSources,
@@ -217,12 +217,12 @@ class CachedShelterRepository:
             limit,
         )
 
-    def page_records(self, shelter_id: str, kind: RecordKind, paging: Pagination, filters: ListFilters) -> Page[ShelterRecord]:
+    def page_records(self, shelter_id: str, kind: RecordKind, paging: Pagination, filters: ListFilters) -> PaginatedResult[ShelterRecord]:
         return self.repository.page_records(shelter_id, kind, paging, filters)
 
-    def page_population(self, shelter_id: str, paging: Pagination, filters: ListFilters) -> Page[PopulationRecord]:
+    def page_population(self, shelter_id: str, paging: Pagination, filters: ListFilters) -> PaginatedResult[PopulationRecord]:
         return self.repository.page_population(shelter_id, paging, filters)
 
     def page_sir_diseases(self, shelter_id: str, since: datetime, until: datetime,
-                          paging: Pagination, disease: str | None = None) -> Page[str]:
+                          paging: Pagination, disease: str | None = None) -> PaginatedResult[str]:
         return self.repository.page_sir_diseases(shelter_id, since, until, paging, disease)

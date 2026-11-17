@@ -10,7 +10,12 @@ from app.api import deps
 from app.api.errors import register_error_handlers
 from app.api.v1.endpoints.albergues import router
 from app.core.timezone import start_of_day_colombia
-from app.domain.pagination import InvalidListQuery, ListFilters, Page, Pagination
+from app.domain.pagination import (
+    InvalidListQuery,
+    ListFilters,
+    PaginatedResult,
+    Pagination,
+)
 from app.domain.users import UserRole
 from app.infrastructure.database.pagination import filtered_query, paginate_find
 from app.infrastructure.repositories.mongo_albergue_repository import (
@@ -25,15 +30,15 @@ def test_domain_rejects_invalid_pagination(page, size):
 
 
 def test_empty_last_and_out_of_range_metadata():
-    empty = Page.create([], Pagination(), 0)
+    empty = PaginatedResult.create([], Pagination(), 0)
     assert empty.total_pages == 0
     assert not empty.has_next
     assert not empty.has_previous
-    last = Page.create(["final"], Pagination(3, 2), 5)
+    last = PaginatedResult.create(["final"], Pagination(3, 2), 5)
     assert last.total_pages == 3
     assert last.has_previous
     assert not last.has_next
-    beyond = Page.create([], Pagination(5, 2), 5)
+    beyond = PaginatedResult.create([], Pagination(5, 2), 5)
     assert beyond.items == []
     assert beyond.page == 5
     assert beyond.total == 5

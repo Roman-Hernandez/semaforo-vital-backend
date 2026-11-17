@@ -13,7 +13,7 @@ from app.domain.errors import (
     PersistenceError,
     PopulationConflict,
 )
-from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.shelters import (
     AlertStatistics,
     AnalysisInputs,
@@ -189,7 +189,7 @@ class MongoShelterRepository:
         self.database = database
 
     @_persistence
-    def page_records(self, shelter_id: str, kind: RecordKind, paging: Pagination, filters: ListFilters) -> Page[ShelterRecord]:
+    def page_records(self, shelter_id: str, kind: RecordKind, paging: Pagination, filters: ListFilters) -> PaginatedResult[ShelterRecord]:
         date_field = "fecha_intervencion" if kind == RecordKind.INTERVENTION else "fecha"
         fields = {RecordKind.DISEASE: ("enfermedad",),
                   RecordKind.SANITARY: ("estado_higiene", "estado_saneamiento", "observaciones"),
@@ -198,14 +198,14 @@ class MongoShelterRepository:
         return paginate_find(self.database[kind.value], query, paging, [(date_field, -1), ("_id", -1)], _RECORD_MAPPERS[kind])
 
     @_persistence
-    def page_population(self, shelter_id: str, paging: Pagination, filters: ListFilters) -> Page[PopulationRecord]:
+    def page_population(self, shelter_id: str, paging: Pagination, filters: ListFilters) -> PaginatedResult[PopulationRecord]:
         query = filtered_query({"albergue_id": ObjectId(shelter_id)}, filters, (), "fecha")
         return paginate_find(self.database.historial_poblacion, query, paging,
                              [("fecha", -1), ("_id", -1)], _population_record)
 
     @_persistence
     def page_sir_diseases(self, shelter_id: str, since: datetime, until: datetime,
-                          paging: Pagination, disease: str | None = None) -> Page[str]:
+                          paging: Pagination, disease: str | None = None) -> PaginatedResult[str]:
         pipeline = [{_MATCH: {"albergue_id": ObjectId(shelter_id), "fecha": {"$gte": since, "$lte": until}}},
             {"$group": {"_id": {"$toLower": {"$trim": {"input": _DISEASE_FIELD}}}, "nombre": {"$first": _DISEASE_FIELD}}}]
         if disease:

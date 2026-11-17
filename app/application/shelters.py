@@ -7,7 +7,7 @@ from app.domain.errors import (
     ShelterInactive,
     ShelterNotFound,
 )
-from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.ports.shelter_repository import ShelterRepository
 from app.domain.shelters import (
     DailyCases,
@@ -97,11 +97,11 @@ class ShelterService:
         return shelter_id
 
     def records_page(self, user: User, kind: RecordKind, paging: Pagination, filters: ListFilters,
-                     shelter_id: str | None = None) -> Page[ShelterRecord]:
+                     shelter_id: str | None = None) -> PaginatedResult[ShelterRecord]:
         scope = self._shelter_scope(user, shelter_id)
         return self.repository.page_records(scope, kind, paging, filters)
 
-    def population_page(self, user: User, paging: Pagination, filters: ListFilters) -> Page[PopulationRecord]:
+    def population_page(self, user: User, paging: Pagination, filters: ListFilters) -> PaginatedResult[PopulationRecord]:
         scope = self._shelter_scope(user, None)
         return self.repository.page_population(scope, paging, filters)
 

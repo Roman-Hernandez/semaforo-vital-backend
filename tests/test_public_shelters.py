@@ -11,7 +11,7 @@ from app.api.deps import get_albergue_repository, get_database
 from app.api.errors import register_error_handlers
 from app.api.v1.endpoints.albergues import router as admin_router
 from app.api.v1.endpoints.public_shelters import router
-from app.domain.pagination import Page
+from app.domain.pagination import PaginatedResult
 from app.domain.public_shelters import (
     PublicAlert,
     PublicSanitaryConditions,
@@ -42,9 +42,9 @@ def api():
         [PUBLIC][offset:offset + limit] if shelter_id in (None, ID) else [])
     repository.public_alerts.return_value = [PublicAlert(id=str(ObjectId()), albergue_id=ID,
         fecha_alerta=NOW, nivel_riesgo="amarillo", tipo_alerta="agua", mensaje="Revisar agua", activa=True)]
-    repository.page_public_shelters.side_effect = lambda paging, filters: Page.create(
+    repository.page_public_shelters.side_effect = lambda paging, filters: PaginatedResult.create(
         [PUBLIC][paging.offset:paging.offset + paging.page_size], paging, 1)
-    repository.page_public_alerts.side_effect = lambda paging, filters, shelter_id=None, active=None: Page.create(
+    repository.page_public_alerts.side_effect = lambda paging, filters, shelter_id=None, active=None: PaginatedResult.create(
         repository.public_alerts.return_value[paging.offset:paging.offset + paging.page_size], paging, 1)
     app = FastAPI()
     register_error_handlers(app)
@@ -68,7 +68,7 @@ def test_public_reads_need_no_token(api, path):
 def test_public_contract_filters_unexpected_private_fields(api):
     client, repository, _ = api
     repository.page_public_shelters.side_effect = None
-    repository.page_public_shelters.return_value = Page([{**asdict(PUBLIC), "email": "private@example.com", "registrado_por": "private"}], 1, 20, 1, 1, False, False)
+    repository.page_public_shelters.return_value = PaginatedResult([{**asdict(PUBLIC), "email": "private@example.com", "registrado_por": "private"}], 1, 20, 1, 1, False, False)
     data = client.get("/api/v1/publico/albergues").json()["items"][0]
     assert "email" not in data
     assert "registrado_por" not in data

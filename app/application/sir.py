@@ -5,7 +5,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from app.domain.errors import ShelterNotFound
-from app.domain.pagination import Page, Pagination
+from app.domain.pagination import PaginatedResult, Pagination
 from app.domain.ports.shelter_repository import ShelterRepository
 from app.domain.shelters import DiseaseRecord, PopulationRecord, assigned_shelter
 from app.domain.sir import SIRSettings, solve_sir
@@ -63,7 +63,7 @@ class SIRResult:
     ventana_datos_dias: int
     metodo_numerico: str
     datos_faltantes: list[str]
-    resultados: Page[SIRDiseaseResult]
+    resultados: PaginatedResult[SIRDiseaseResult]
     supuestos: tuple[str, ...]
 
 
@@ -117,7 +117,7 @@ class SIRService:
         if not diseases.total:
             missing.append("casos_enfermedades")
         return SIRResult(shelter_id, shelter.nombre, latest.poblacion if latest else None,
-            latest.fecha if latest else None, now, self.horizon_days, self.history_days, "RK4", missing, Page.create(results, paging, diseases.total),
+            latest.fecha if latest else None, now, self.horizon_days, self.history_days, "RK4", missing, PaginatedResult.create(results, paging, diseases.total),
             ("Estimación determinista ajustada a observaciones; no es una predicción clínicamente validada",
              "Población cerrada, mezcla homogénea, tasas constantes y sin reinfecciones durante el horizonte",
              "No se transforma la ausencia de un registro en cero ni se usan parámetros de demostración"))

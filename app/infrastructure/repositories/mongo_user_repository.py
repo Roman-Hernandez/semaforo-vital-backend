@@ -8,7 +8,7 @@ from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.domain.errors import DuplicateUserEmail, PersistenceError
-from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.users import AdministratorChanges, AdministratorDetails, User, UserRole
 from app.infrastructure.database.errors import persistence_guard as _persistence
 from app.infrastructure.database.pagination import filtered_query, paginate_find
@@ -95,7 +95,7 @@ class MongoUserRepository:
 
 
     @_persistence
-    def page_admins(self, paging: Pagination, filters: ListFilters, active: bool | None = None) -> Page[User]:
+    def page_admins(self, paging: Pagination, filters: ListFilters, active: bool | None = None) -> PaginatedResult[User]:
         query = {"role": UserRole.SHELTER_ADMIN.value}
         if active is not None:
             query["active"] = active
@@ -104,6 +104,6 @@ class MongoUserRepository:
         ids = {ObjectId(user.albergue_id) for user in page.items if user.albergue_id and ObjectId.is_valid(user.albergue_id)}
         shelters = {str(row["_id"]): row for row in self.database.albergues.find(
             {"_id": {"$in": list(ids)}}, {"nombre": 1, "codigo_albergue": 1})} if ids else {}
-        return Page[User].create([replace(user,
+        return PaginatedResult[User].create([replace(user,
             albergue_nombre=shelters.get(user.albergue_id, {}).get("nombre"),
             codigo_albergue=shelters.get(user.albergue_id, {}).get("codigo_albergue")) for user in page.items], paging, page.total)

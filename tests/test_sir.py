@@ -10,7 +10,7 @@ from app.api.deps import get_current_user, get_shelter_service, get_user_reposit
 from app.api.errors import register_error_handlers
 from app.api.v1.endpoints.sir import router
 from app.application.shelters import ShelterService
-from app.domain.pagination import Page
+from app.domain.pagination import PaginatedResult
 from app.domain.shelters import DiseaseRecord
 from app.domain.sir import InvalidSIRInput, SIRSettings, solve_sir
 from app.domain.users import UserRole
@@ -93,7 +93,7 @@ def api():
             registrado_por=USER.id, created_at=day))
     def page_diseases(shelter_id, since, until, paging, disease=None):
         names = sorted({row.enfermedad for row in rows if disease is None or row.enfermedad.casefold() == disease.strip().casefold()})
-        return Page.create(names[paging.offset:paging.offset + paging.page_size], paging, len(names))
+        return PaginatedResult.create(names[paging.offset:paging.offset + paging.page_size], paging, len(names))
     repo.page_sir_diseases = page_diseases
     repo.sir_history = lambda shelter_id, since, until, diseases=None: [row for row in rows if diseases is None or row.enfermedad.casefold() in {name.casefold() for name in diseases}]
     app = FastAPI()

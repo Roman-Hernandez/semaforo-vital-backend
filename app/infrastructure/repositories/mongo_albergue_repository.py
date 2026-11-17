@@ -11,7 +11,7 @@ from pymongo.errors import DuplicateKeyError, WriteError
 
 from app.domain.albergues import ShelterCreate, ShelterSummary
 from app.domain.errors import DuplicateShelterCode, InvalidShelterData
-from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.public_shelters import (
     PublicAlert,
     PublicSanitaryConditions,
@@ -218,16 +218,16 @@ class MongoAlbergueRepository:
 
     @_persistence
     def page_shelters(self, paging: Pagination, filters: ListFilters, active: bool | None = None,
-                      shelter_id: str | None = None) -> Page[Shelter]:
+                      shelter_id: str | None = None) -> PaginatedResult[Shelter]:
         query = {} if active is None else {"activo": active}
         if shelter_id is not None:
             query["_id"] = _oid(shelter_id)
         query = filtered_query(query, filters, ("nombre", "codigo_albergue", "ubicacion.municipio", "ubicacion.departamento"), "created_at")
         page = paginate_find(self._col, query, paging, [("codigo_albergue", 1), ("_id", 1)], _shelter)
-        return Page[Shelter].create(self._enrich_shelters(page.items), paging, page.total)
+        return PaginatedResult[Shelter].create(self._enrich_shelters(page.items), paging, page.total)
 
     @_persistence
-    def page_public_shelters(self, paging: Pagination, filters: ListFilters) -> Page[PublicShelter]:
+    def page_public_shelters(self, paging: Pagination, filters: ListFilters) -> PaginatedResult[PublicShelter]:
         query = filtered_query({"activo": True}, filters,
             ("nombre", "codigo_albergue", "ubicacion.municipio", "ubicacion.departamento"), "created_at")
         lookups = []
@@ -244,7 +244,7 @@ class MongoAlbergueRepository:
 
     @_persistence
     def page_public_alerts(self, paging: Pagination, filters: ListFilters,
-                           shelter_id: str | None = None, active: bool | None = None) -> Page[PublicAlert]:
+                           shelter_id: str | None = None, active: bool | None = None) -> PaginatedResult[PublicAlert]:
         query = {"publica": True}
         if shelter_id is not None:
             query["albergue_id"] = _oid(shelter_id)

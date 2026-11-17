@@ -1,7 +1,7 @@
 """Paginación en memoria únicamente para repositorios de prueba."""
 from dataclasses import asdict
 
-from app.domain.pagination import ListFilters, Page
+from app.domain.pagination import ListFilters, PaginatedResult
 
 
 def memory_page(rows, paging, filters=None, date_field="fecha"):
@@ -12,4 +12,4 @@ def memory_page(rows, paging, filters=None, date_field="fecha"):
         rows = [row for row in rows if getattr(row, date_field) >= filters.since]
     if filters.until:
         rows = [row for row in rows if getattr(row, date_field) < filters.until]
-    return Page.create(rows[paging.offset:paging.offset + paging.page_size], paging, len(rows))
+    return PaginatedResult.create(rows[paging.offset:paging.offset + paging.page_size], paging, len(rows))

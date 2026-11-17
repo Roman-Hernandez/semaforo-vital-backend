@@ -8,7 +8,7 @@ from app.domain.errors import (
     ShelterNotFound,
     UserNotFound,
 )
-from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.ports.albergue_repository import AlbergueRepository
 from app.domain.ports.user_repository import UserRepository
 from app.domain.users import AdministratorChanges, AdministratorDetails, User, UserRole
@@ -40,7 +40,7 @@ class AdministratorService:
         if not shelter.activo:
             raise ShelterInactive()
 
-    def page(self, actor: User, paging: Pagination, filters: ListFilters, active: bool | None = None) -> Page[User]:
+    def page(self, actor: User, paging: Pagination, filters: ListFilters, active: bool | None = None) -> PaginatedResult[User]:
         self._authorize(actor)
         return self.users.page_admins(paging, filters, active)
 

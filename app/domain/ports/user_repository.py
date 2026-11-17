@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Protocol
 
-from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.users import AdministratorChanges, AdministratorDetails, User
 
 
@@ -17,4 +17,4 @@ class UserRepository(Protocol):
 
     def assign_admin(self, user_id: str, shelter_id: str | None, actor_id: str, now: datetime) -> User | None: ...
 
-    def page_admins(self, paging: Pagination, filters: ListFilters, active: bool | None = None) -> Page[User]: ...
+    def page_admins(self, paging: Pagination, filters: ListFilters, active: bool | None = None) -> PaginatedResult[User]: ...

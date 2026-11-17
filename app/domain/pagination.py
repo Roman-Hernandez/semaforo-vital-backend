@@ -31,7 +31,7 @@ class ListFilters:
 
 
 @dataclass(frozen=True)
-class Page[T]:
+class PaginatedResult[T]:
     items: list[T]
     page: int
     page_size: int
@@ -41,7 +41,7 @@ class Page[T]:
     has_previous: bool
 
     @classmethod
-    def create(cls, items: list[T], pagination: Pagination, total: int) -> "Page[T]":
+    def create(cls, items: list[T], pagination: Pagination, total: int) -> "PaginatedResult[T]":
         total_pages = (total + pagination.page_size - 1) // pagination.page_size
         return cls(items, pagination.page, pagination.page_size, total, total_pages,
                    pagination.page < total_pages, pagination.page > 1 and total > 0)

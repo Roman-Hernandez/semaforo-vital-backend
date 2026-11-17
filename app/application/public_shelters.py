@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.domain.errors import ShelterNotFound
-from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.ports.albergue_repository import AlbergueRepository
 from app.domain.public_shelters import PublicAlert, PublicShelter
 
@@ -10,11 +10,11 @@ class PublicShelterService:
     def __init__(self, repository: AlbergueRepository):
         self.repository = repository
 
-    def page(self, paging: Pagination, filters: ListFilters) -> Page[PublicShelter]:
+    def page(self, paging: Pagination, filters: ListFilters) -> PaginatedResult[PublicShelter]:
         return self.repository.page_public_shelters(paging, filters)
 
     def alerts_page(self, paging: Pagination, filters: ListFilters,
-                    shelter_id: str | None = None, active: bool | None = None) -> Page[PublicAlert]:
+                    shelter_id: str | None = None, active: bool | None = None) -> PaginatedResult[PublicAlert]:
         if shelter_id is not None:
             self.get(shelter_id)
         return self.repository.page_public_alerts(paging, filters, shelter_id, active)

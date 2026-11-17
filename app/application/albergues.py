@@ -3,7 +3,7 @@ from datetime import datetime
 
 from app.domain.albergues import ShelterCreate, ShelterSummary
 from app.domain.errors import InsufficientPermissions, ShelterInactive, ShelterNotFound
-from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.pagination import ListFilters, PaginatedResult, Pagination
 from app.domain.ports.albergue_repository import AlbergueRepository
 from app.domain.shelters import Shelter, ShelterUpdate
 from app.domain.users import User, UserRole
@@ -43,7 +43,7 @@ class AlbergueService:
         self._require_super(actor)
         return self.repository.summary()
 
-    def page(self, actor: User, paging: Pagination, filters: ListFilters, active: bool | None = None) -> Page[Shelter]:
+    def page(self, actor: User, paging: Pagination, filters: ListFilters, active: bool | None = None) -> PaginatedResult[Shelter]:
         if self._is_super(actor):
             return self.repository.page_shelters(paging, filters, active)
         if actor.role == UserRole.SHELTER_ADMIN and actor.albergue_id is not None:

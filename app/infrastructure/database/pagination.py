@@ -5,7 +5,12 @@ from typing import TypeVar
 
 from pymongo.collection import Collection
 
-from app.domain.pagination import InvalidListQuery, ListFilters, Page, Pagination
+from app.domain.pagination import (
+    InvalidListQuery,
+    ListFilters,
+    PaginatedResult,
+    Pagination,
+)
 
 T = TypeVar("T")
 
@@ -27,18 +32,18 @@ def filtered_query(base: dict, filters: ListFilters, text_fields: Sequence[str],
 
 
 def paginate_find(collection: Collection, query: dict, paging: Pagination,
-                  sort: list[tuple[str, int]], mapper: Callable[[dict], T]) -> Page[T]:
+                  sort: list[tuple[str, int]], mapper: Callable[[dict], T]) -> PaginatedResult[T]:
     total = collection.count_documents(query)
     cursor = collection.find(query).sort(sort).skip(paging.offset).limit(paging.page_size)
-    return Page.create([mapper(row) for row in cursor], paging, total)
+    return PaginatedResult.create([mapper(row) for row in cursor], paging, total)
 
 
 def paginate_aggregate(collection: Collection, pipeline: list[dict], paging: Pagination,
-                       mapper: Callable[[dict], T], *, item_pipeline: list[dict] | None = None) -> Page[T]:
+                       mapper: Callable[[dict], T], *, item_pipeline: list[dict] | None = None) -> PaginatedResult[T]:
     stages = [*pipeline, {"$facet": {
         "items": [{"$skip": paging.offset}, {"$limit": paging.page_size}, *(item_pipeline or [])],
         "total": [{"$count": "value"}],
     }}]
     result = next(iter(collection.aggregate(stages)), {"items": [], "total": []})
     total = result["total"][0]["value"] if result["total"] else 0
-    return Page.create([mapper(row) for row in result["items"]], paging, total)
+    return PaginatedResult.create([mapper(row) for row in result["items"]], paging, total)
