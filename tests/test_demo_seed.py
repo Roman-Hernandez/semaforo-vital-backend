@@ -26,7 +26,8 @@ def test_seed_volume_location_and_accounts(dataset):
         assert shelter["nombre"].startswith("[DEMO]")
         assert shelter["ubicacion"]["municipio"] == "Pereira"
         longitude, latitude = shelter["ubicacion"]["coordenadas"]["coordinates"]
-        assert -75.71 < longitude < -75.68 and 4.80 < latitude < 4.825
+        assert -75.71 < longitude < -75.68
+        assert 4.80 < latitude < 4.825
         assert shelter["codigo_albergue"] == f"ALB-{str(shelter['_id']).upper()}"
     assert all(user["role"] == "administrador_albergue" for user in dataset["usuarios"])
     assert all("password" not in user and user["password_hash"].startswith("$argon2id$") for user in dataset["usuarios"])
@@ -61,7 +62,8 @@ def test_source_references_exist_and_sir_counts_are_consistent(dataset):
         assert event["entidad_id"] in ids[event["entidad"]]
         assert event["accion"] == "CARGA_DATOS_SINTETICOS"
     for state in dataset["estados_semaforo"]:
-        assert "updated_at" not in state and "updated_by" not in state
+        assert "updated_at" not in state
+        assert "updated_by" not in state
         for field, collection in (("condiciones_sanitarias_ids", "condiciones_sanitarias"),
             ("casos_enfermedades_ids", "casos_enfermedades"), ("alertas_ids", "alertas"),
             ("predicciones_sir_ids", "predicciones_sir"), ("metricas_albergue_ids", "metricas_albergue")):

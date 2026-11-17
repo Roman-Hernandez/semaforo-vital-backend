@@ -26,11 +26,17 @@ def test_domain_rejects_invalid_pagination(page, size):
 
 def test_empty_last_and_out_of_range_metadata():
     empty = Page.create([], Pagination(), 0)
-    assert empty.total_pages == 0 and not empty.has_next and not empty.has_previous
+    assert empty.total_pages == 0
+    assert not empty.has_next
+    assert not empty.has_previous
     last = Page.create(["final"], Pagination(3, 2), 5)
-    assert last.total_pages == 3 and last.has_previous and not last.has_next
+    assert last.total_pages == 3
+    assert last.has_previous
+    assert not last.has_next
     beyond = Page.create([], Pagination(5, 2), 5)
-    assert beyond.items == [] and beyond.page == 5 and beyond.total == 5
+    assert beyond.items == []
+    assert beyond.page == 5
+    assert beyond.total == 5
 
 
 def test_shared_mongo_page_counts_same_scope_and_limits_before_mapping():
@@ -40,7 +46,9 @@ def test_shared_mongo_page_counts_same_scope_and_limits_before_mapping():
     cursor.__iter__.return_value = iter([{"id": "x"}])
     query = {"albergue_id": "propio"}
     page = paginate_find(collection, query, Pagination(2, 10), [("fecha", -1), ("_id", -1)], lambda row: row["id"])
-    assert page.items == ["x"] and page.total == 31 and page.total_pages == 4
+    assert page.items == ["x"]
+    assert page.total == 31
+    assert page.total_pages == 4
     collection.count_documents.assert_called_once_with(query)
     collection.find.assert_called_once_with(query)
     collection.find.return_value.sort.assert_called_once_with([("fecha", -1), ("_id", -1)])
@@ -76,12 +84,15 @@ def test_api_pages_are_stable_and_filters_change_total(api):
     first = client.get("/api/v1/albergues?page=1&page_size=2").json()
     last = client.get("/api/v1/albergues?page=2&page_size=2").json()
     assert first["total"] == last["total"] == 3
-    assert first["has_next"] and last["has_previous"]
+    assert first["has_next"]
+    assert last["has_previous"]
     assert {row["id"] for row in first["items"]}.isdisjoint(row["id"] for row in last["items"])
     filtered = client.get("/api/v1/albergues?activo=true&page_size=1").json()
-    assert filtered["total"] == 2 and filtered["total_pages"] == 2
+    assert filtered["total"] == 2
+    assert filtered["total_pages"] == 2
     search = client.get("/api/v1/albergues?q=ALB-002").json()
-    assert search["total"] == 1 and search["items"][0]["codigo_albergue"] == "ALB-002"
+    assert search["total"] == 1
+    assert search["items"][0]["codigo_albergue"] == "ALB-002"
     assert client.get("/api/v1/albergues?page=99").json()["items"] == []
 
 
@@ -89,7 +100,8 @@ def test_admin_total_does_not_reveal_other_shelters(api):
     client, app, shelter = api
     app.dependency_overrides[deps.get_current_user] = lambda: _user(UserRole.SHELTER_ADMIN, shelter.id)
     page = client.get("/api/v1/albergues").json()
-    assert page["total"] == 1 and [row["id"] for row in page["items"]] == [shelter.id]
+    assert page["total"] == 1
+    assert [row["id"] for row in page["items"]] == [shelter.id]
 
 
 @pytest.mark.parametrize("query", ["page=0", "page_size=101", "page=abc", "limite=30", "offset=0",
@@ -103,7 +115,8 @@ def test_public_alert_total_counts_only_published_alerts_of_active_shelters():
     db = MagicMock()
     db.alertas.aggregate.return_value = iter([{"items": [], "total": [{"value": 7}]}])
     page = MongoAlbergueRepository(db).page_public_alerts(Pagination(2, 2), ListFilters(), active=True)
-    assert page.total == 7 and page.total_pages == 4
+    assert page.total == 7
+    assert page.total_pages == 4
     pipeline = db.alertas.aggregate.call_args.args[0]
     assert pipeline[0] == {"$match": {"publica": True, "activa": True}}
     assert pipeline[1]["$lookup"]["pipeline"][0] == {"$match": {"activo": True}}

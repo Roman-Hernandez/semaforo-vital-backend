@@ -76,10 +76,10 @@ def _observations(cases: list[DiseaseRecord], populations: list[PopulationRecord
     days: dict[date, DiseaseRecord] = {}
     for row in sorted(cases, key=lambda r: (r.fecha, r.last_updated, r.id)):
         days[_day(row.fecha)] = row
-    ordered_populations = sorted(populations, key=lambda r: (r.fecha, r.last_updated, r.id))
+    ordered_populations = sorted(populations, key=lambda r: (r.fecha, r.last_updated, r.id), reverse=True)
     observations = []
     for day, row in sorted(days.items()):
-        population = next((p for p in reversed(ordered_populations) if _day(p.fecha) <= day), None)
+        population = next((p for p in ordered_populations if _day(p.fecha) <= day), None)
         observations.append(SIRObservation(day, population.poblacion if population else None,
             row.cantidad_casos_activos, row.cantidad_recuperados, row.id, population.id if population else None))
     return observations

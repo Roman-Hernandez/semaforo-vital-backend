@@ -35,6 +35,14 @@ from app.infrastructure.repositories.mongo_shelter_repository import (
 _SCHEMA_VALIDATION_ERROR = 121
 
 
+_MATCH = "$match"
+_SORT = "$sort"
+_LIMIT = "$limit"
+_PROJECT = "$project"
+_LOOKUP = "$lookup"
+_COND = "$cond"
+_SIZE = "$size"
+
 def _oid(value: str) -> ObjectId | None:
     return ObjectId(value) if ObjectId.is_valid(value) else None
 
@@ -75,8 +83,8 @@ class MongoAlbergueRepository:
             ("estados_semaforo", "fecha_calculo", "nivel", "risk"),
         ):
             documents = self.database[collection].aggregate([
-                {"$match": {"albergue_id": {"$in": ids}}},
-                {"$sort": {"albergue_id": 1, date_field: -1, "_id": -1}},
+                {_MATCH: {"albergue_id": {"$in": ids}}},
+                {_SORT: {"albergue_id": 1, date_field: -1, "_id": -1}},
                 {"$group": {"_id": "$albergue_id", "value": {"$first": "$" + field}}},
             ])
             values[name] = {str(row["_id"]): row["value"] for row in documents}
@@ -156,9 +164,9 @@ class MongoAlbergueRepository:
             if oid is None:
                 return []
             query["_id"] = oid
-        pipeline = [{"$match": query}, {"$sort": {"codigo_albergue": 1, "_id": 1}},
-                    {"$skip": offset}, {"$limit": limit},
-                    {"$project": {"codigo_albergue": 1, "nombre": 1, "ubicacion": 1, "capacidad_instalada": 1}}]
+        pipeline = [{_MATCH: query}, {_SORT: {"codigo_albergue": 1, "_id": 1}},
+                    {"$skip": offset}, {_LIMIT: limit},
+                    {_PROJECT: {"codigo_albergue": 1, "nombre": 1, "ubicacion": 1, "capacidad_instalada": 1}}]
         # Each lookup is scoped to one shelter and reads only its latest public summary.
         for collection, date_field, fields, alias in (
             ("historial_poblacion", "fecha", {"poblacion": 1}, "population"),
@@ -166,10 +174,10 @@ class MongoAlbergueRepository:
             ("condiciones_sanitarias", "fecha", {"fecha": 1, "agua_potable_disponible": 1,
                 "banos_disponibles": 1, "estado_higiene": 1, "estado_saneamiento": 1}, "sanitary"),
         ):
-            pipeline.append({"$lookup": {
+            pipeline.append({_LOOKUP: {
                 "from": collection, "localField": "_id", "foreignField": "albergue_id",
-                "pipeline": [{"$sort": {date_field: -1, "_id": -1}}, {"$limit": 1},
-                             {"$project": {"_id": 0, **fields}}], "as": alias,
+                "pipeline": [{_SORT: {date_field: -1, "_id": -1}}, {_LIMIT: 1},
+                             {_PROJECT: {"_id": 0, **fields}}], "as": alias,
             }})
         return [self._public_shelter(raw) for raw in self._col.aggregate(pipeline)]
 
@@ -197,12 +205,12 @@ class MongoAlbergueRepository:
                 return []
             query["albergue_id"] = oid
         pipeline = [
-            {"$match": query},
-            {"$lookup": {"from": "albergues", "localField": "albergue_id", "foreignField": "_id",
-                "pipeline": [{"$match": {"activo": True}}, {"$project": {"_id": 1}}], "as": "shelter"}},
-            {"$match": {"shelter.0": {"$exists": True}}},
-            {"$sort": {"fecha_alerta": -1, "_id": -1}}, {"$skip": offset}, {"$limit": limit},
-            {"$project": {"albergue_id": 1, "fecha_alerta": 1, "nivel_riesgo": 1,
+            {_MATCH: query},
+            {_LOOKUP: {"from": "albergues", "localField": "albergue_id", "foreignField": "_id",
+                "pipeline": [{_MATCH: {"activo": True}}, {_PROJECT: {"_id": 1}}], "as": "shelter"}},
+            {_MATCH: {"shelter.0": {"$exists": True}}},
+            {_SORT: {"fecha_alerta": -1, "_id": -1}}, {"$skip": offset}, {_LIMIT: limit},
+            {_PROJECT: {"albergue_id": 1, "fecha_alerta": 1, "nivel_riesgo": 1,
                           "tipo_alerta": 1, "mensaje": 1, "activa": 1}},
         ]
         return [PublicAlert(**_plain(doc)) for doc in self.database.alertas.aggregate(pipeline)]
@@ -216,7 +224,7 @@ class MongoAlbergueRepository:
             query["_id"] = _oid(shelter_id)
         query = filtered_query(query, filters, ("nombre", "codigo_albergue", "ubicacion.municipio", "ubicacion.departamento"), "created_at")
         page = paginate_find(self._col, query, paging, [("codigo_albergue", 1), ("_id", 1)], _shelter)
-        return replace(page, items=self._enrich_shelters(page.items))
+        return Page[Shelter].create(self._enrich_shelters(page.items), paging, page.total)
 
     @_persistence
     def page_public_shelters(self, paging: Pagination, filters: ListFilters) -> Page[PublicShelter]:
@@ -229,9 +237,9 @@ class MongoAlbergueRepository:
             ("condiciones_sanitarias", "fecha", {"fecha": 1, "agua_potable_disponible": 1,
                 "banos_disponibles": 1, "estado_higiene": 1, "estado_saneamiento": 1}, "sanitary"),
         ):
-            lookups.append({"$lookup": {"from": collection, "localField": "_id", "foreignField": "albergue_id",
-                "pipeline": [{"$sort": {date_field: -1, "_id": -1}}, {"$limit": 1}, {"$project": {"_id": 0, **fields}}], "as": alias}})
-        return paginate_aggregate(self._col, [{"$match": query}, {"$sort": {"codigo_albergue": 1, "_id": 1}}],
+            lookups.append({_LOOKUP: {"from": collection, "localField": "_id", "foreignField": "albergue_id",
+                "pipeline": [{_SORT: {date_field: -1, "_id": -1}}, {_LIMIT: 1}, {_PROJECT: {"_id": 0, **fields}}], "as": alias}})
+        return paginate_aggregate(self._col, [{_MATCH: query}, {_SORT: {"codigo_albergue": 1, "_id": 1}}],
             paging, self._public_shelter, item_pipeline=lookups)
 
     @_persistence
@@ -243,11 +251,11 @@ class MongoAlbergueRepository:
         if active is not None:
             query["activa"] = active
         query = filtered_query(query, filters, ("tipo_alerta", "mensaje"), "fecha_alerta")
-        pipeline = [{"$match": query},
-            {"$lookup": {"from": "albergues", "localField": "albergue_id", "foreignField": "_id",
-                "pipeline": [{"$match": {"activo": True}}, {"$project": {"_id": 1}}], "as": "shelter"}},
-            {"$match": {"shelter.0": {"$exists": True}}}, {"$sort": {"fecha_alerta": -1, "_id": -1}}]
-        projection = {"$project": {"albergue_id": 1, "fecha_alerta": 1, "nivel_riesgo": 1,
+        pipeline = [{_MATCH: query},
+            {_LOOKUP: {"from": "albergues", "localField": "albergue_id", "foreignField": "_id",
+                "pipeline": [{_MATCH: {"activo": True}}, {_PROJECT: {"_id": 1}}], "as": "shelter"}},
+            {_MATCH: {"shelter.0": {"$exists": True}}}, {_SORT: {"fecha_alerta": -1, "_id": -1}}]
+        projection = {_PROJECT: {"albergue_id": 1, "fecha_alerta": 1, "nivel_riesgo": 1,
                                    "tipo_alerta": 1, "mensaje": 1, "activa": 1}}
         return paginate_aggregate(self.database.alertas, pipeline, paging,
             lambda row: PublicAlert(**_plain(row)), item_pipeline=[projection])
@@ -260,19 +268,19 @@ class MongoAlbergueRepository:
             ("historial_poblacion", "fecha", {"poblacion": 1}, "population"),
             ("estados_semaforo", "fecha_calculo", {"nivel": 1}, "risk"),
         ):
-            pipeline.append({"$lookup": {"from": collection, "localField": "_id", "foreignField": "albergue_id",
-                "pipeline": [{"$sort": {date_field: -1, "_id": -1}}, {"$limit": 1}, {"$project": projection}], "as": alias}})
+            pipeline.append({_LOOKUP: {"from": collection, "localField": "_id", "foreignField": "albergue_id",
+                "pipeline": [{_SORT: {date_field: -1, "_id": -1}}, {_LIMIT: 1}, {_PROJECT: projection}], "as": alias}})
         pipeline.extend([
-            {"$lookup": {"from": "usuarios", "localField": "_id", "foreignField": "albergue_id",
-                "pipeline": [{"$match": {"role": "administrador_albergue"}}, {"$limit": 1}, {"$project": {"_id": 1}}], "as": "admins"}},
+            {_LOOKUP: {"from": "usuarios", "localField": "_id", "foreignField": "albergue_id",
+                "pipeline": [{_MATCH: {"role": "administrador_albergue"}}, {_LIMIT: 1}, {_PROJECT: {"_id": 1}}], "as": "admins"}},
             {"$group": {"_id": None,
-                "total": {"$sum": 1}, "active": {"$sum": {"$cond": ["$activo", 1, 0]}},
-                "assigned": {"$sum": {"$cond": [{"$gt": [{"$size": "$admins"}, 0]}, 1, 0]}},
-                "critical": {"$sum": {"$cond": [{"$and": ["$activo", {"$eq": [{"$arrayElemAt": ["$risk.nivel", 0]}, "rojo"]}]}, 1, 0]}},
-                "unknown_risk": {"$sum": {"$cond": [{"$eq": [{"$size": "$risk"}, 0]}, 1, 0]}},
-                "unknown_population": {"$sum": {"$cond": [{"$eq": [{"$size": "$population"}, 0]}, 1, 0]}},
+                "total": {"$sum": 1}, "active": {"$sum": {_COND: ["$activo", 1, 0]}},
+                "assigned": {"$sum": {_COND: [{"$gt": [{_SIZE: "$admins"}, 0]}, 1, 0]}},
+                "critical": {"$sum": {_COND: [{"$and": ["$activo", {"$eq": [{"$arrayElemAt": ["$risk.nivel", 0]}, "rojo"]}]}, 1, 0]}},
+                "unknown_risk": {"$sum": {_COND: [{"$eq": [{_SIZE: "$risk"}, 0]}, 1, 0]}},
+                "unknown_population": {"$sum": {_COND: [{"$eq": [{_SIZE: "$population"}, 0]}, 1, 0]}},
                 "population": {"$sum": {"$ifNull": [{"$arrayElemAt": ["$population.poblacion", 0]}, 0]}},
-                "capacity": {"$sum": {"$cond": [{"$gt": [{"$size": "$population"}, 0]}, "$capacidad_instalada", 0]}},
+                "capacity": {"$sum": {_COND: [{"$gt": [{_SIZE: "$population"}, 0]}, "$capacidad_instalada", 0]}},
             }},
         ])
         row = next(iter(self._col.aggregate(pipeline)), None)

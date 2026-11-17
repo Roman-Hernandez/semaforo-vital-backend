@@ -1,11 +1,8 @@
 """Contrato de paginación independiente de HTTP y MongoDB."""
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Generic, TypeVar
 
 from app.domain.errors import ApplicationError
-
-T = TypeVar("T")
 
 
 class InvalidListQuery(ApplicationError):
@@ -34,7 +31,7 @@ class ListFilters:
 
 
 @dataclass(frozen=True)
-class Page(Generic[T]):
+class Page[T]:
     items: list[T]
     page: int
     page_size: int

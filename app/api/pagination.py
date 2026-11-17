@@ -1,5 +1,5 @@
 from datetime import date, timedelta
-from typing import Annotated, Generic, TypeVar
+from typing import Annotated
 
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, ConfigDict
@@ -7,10 +7,8 @@ from pydantic import BaseModel, ConfigDict
 from app.core.timezone import start_of_day_colombia
 from app.domain.pagination import InvalidListQuery, ListFilters, Pagination
 
-T = TypeVar("T")
 
-
-class PageResponse(BaseModel, Generic[T]):
+class PageResponse[T](BaseModel):
     model_config = ConfigDict(from_attributes=True)
     items: list[T]
     page: int

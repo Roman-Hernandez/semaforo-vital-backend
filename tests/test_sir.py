@@ -142,7 +142,8 @@ def test_missing_recoveries_do_not_become_zero(api):
     result = client.get(URL).json()["resultados"]["items"][0]
     assert result["estado"] == "datos_insuficientes"
     assert "cantidad_recuperados" in result["datos_faltantes"]
-    assert result["proyeccion"] == [] and result["parametros_estimados"] is None
+    assert result["proyeccion"] == []
+    assert result["parametros_estimados"] is None
     assert result["observado"][0]["recuperados"] is None
 
 

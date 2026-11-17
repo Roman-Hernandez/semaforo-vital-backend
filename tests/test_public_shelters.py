@@ -70,7 +70,8 @@ def test_public_contract_filters_unexpected_private_fields(api):
     repository.page_public_shelters.side_effect = None
     repository.page_public_shelters.return_value = Page([{**asdict(PUBLIC), "email": "private@example.com", "registrado_por": "private"}], 1, 20, 1, 1, False, False)
     data = client.get("/api/v1/publico/albergues").json()["items"][0]
-    assert "email" not in data and "registrado_por" not in data
+    assert "email" not in data
+    assert "registrado_por" not in data
     assert data["ubicacion"]["coordenadas"]["coordinates"] == [-75.7, 4.8]
     assert data["nivel_riesgo"] is None
 
@@ -105,7 +106,8 @@ def test_storage_filters_active_shelters_and_limits_public_fields():
     assert repository.list_public(10, 5) == []
     pipeline = database.__getitem__.return_value.aggregate.call_args.args[0]
     assert pipeline[0] == {"$match": {"activo": True}}
-    assert {"$skip": 5} in pipeline and {"$limit": 10} in pipeline
+    assert {"$skip": 5} in pipeline
+    assert {"$limit": 10} in pipeline
     assert pipeline[4]["$project"] == {"codigo_albergue": 1, "nombre": 1, "ubicacion": 1, "capacidad_instalada": 1}
     database.__getitem__.return_value.aggregate.reset_mock()
     assert repository.list_public(10, 0, "invalido") == []

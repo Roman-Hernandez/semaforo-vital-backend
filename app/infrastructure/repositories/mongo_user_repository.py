@@ -104,6 +104,6 @@ class MongoUserRepository:
         ids = {ObjectId(user.albergue_id) for user in page.items if user.albergue_id and ObjectId.is_valid(user.albergue_id)}
         shelters = {str(row["_id"]): row for row in self.database.albergues.find(
             {"_id": {"$in": list(ids)}}, {"nombre": 1, "codigo_albergue": 1})} if ids else {}
-        return replace(page, items=[replace(user,
+        return Page[User].create([replace(user,
             albergue_nombre=shelters.get(user.albergue_id, {}).get("nombre"),
-            codigo_albergue=shelters.get(user.albergue_id, {}).get("codigo_albergue")) for user in page.items])
+            codigo_albergue=shelters.get(user.albergue_id, {}).get("codigo_albergue")) for user in page.items], paging, page.total)

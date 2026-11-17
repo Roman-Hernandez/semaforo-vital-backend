@@ -88,7 +88,8 @@ def test_create_list_correct_and_keep_trace(api, path, kind, payload, cls):
     created = client.post(url, json=payload)
     assert created.status_code == 201, created.text
     row = created.json()
-    assert row["albergue_id"] == SHELTER and row["registrado_por"] == USER.id
+    assert row["albergue_id"] == SHELTER
+    assert row["registrado_por"] == USER.id
     assert row["fuente_datos"] == "registro_manual"
     assert client.get(url).json()["items"] == [row]
     updated = client.put(f"{url}/{row['id']}", json={**payload, "observaciones": "Verificado"})
@@ -143,7 +144,8 @@ def test_mongo_scopes_update_and_preserves_author():
     assert repository.save_record(SHELTER, RecordKind.INTERVENTION, command, USER.id, NOW, row_id) is None
     query, update = collection.find_one_and_update.call_args.args
     assert query == {"_id": ObjectId(row_id), "albergue_id": ObjectId(SHELTER)}
-    assert "registrado_por" not in update["$set"] and "created_at" not in update["$set"]
+    assert "registrado_por" not in update["$set"]
+    assert "created_at" not in update["$set"]
     assert update["$set"]["updated_by"] == ObjectId(USER.id)
     assert "observaciones" not in update["$set"]
     assert update["$unset"] == {"observaciones": ""}
@@ -186,7 +188,8 @@ def test_mongo_insert_keeps_bson_types_and_omits_optional_nulls():
     document = collection.insert_one.call_args.args[0]
     assert document["albergue_id"] == ObjectId(SHELTER)
     assert document["registrado_por"] == ObjectId(USER.id)
-    assert document["fecha"].hour == 0 and document["fecha"].utcoffset().total_seconds() == -18000
+    assert document["fecha"].hour == 0
+    assert document["fecha"].utcoffset().total_seconds() == -18000
     assert "observaciones" not in document
     assert "observacion" not in document["otros_recursos_sanitarios"][0]
     assert result.otros_recursos_sanitarios[0].cantidad == 2

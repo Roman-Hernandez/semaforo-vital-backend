@@ -80,11 +80,13 @@ def test_create_edit_disable_enable_and_assign(api):
     assert client.get(f"{BASE}/{row['id']}").json() == row
     stored = users.users[row["id"]]
     assert verify_password(PASSWORD, stored.password_hash)
-    assert "password_hash" not in row and "password" not in row
+    assert "password_hash" not in row
+    assert "password" not in row
     assert PASSWORD not in created.text
     url = f"{BASE}/{row['id']}"
     updated = client.patch(url, json={"nombre": "Andrea", "active": False, "password": "NuevaClave123"})
-    assert updated.status_code == 200 and not updated.json()["active"]
+    assert updated.status_code == 200
+    assert not updated.json()["active"]
     assert users.users[row["id"]].nombre == "Andrea"
     assert verify_password("NuevaClave123", users.users[row["id"]].password_hash)
     assert client.patch(url, json={"active": True}).json()["active"]
@@ -134,6 +136,7 @@ def test_storage_handles_race_on_unique_email():
     db = MagicMock()
     db.__getitem__.return_value.insert_one.side_effect = DuplicateKeyError("duplicate")
     repository = MongoUserRepository(db)
+    details = AdministratorDetails(email="a@example.com", nombre="Ana", apellido="Pérez")
+    password_hash = hash_password(PASSWORD)
     with pytest.raises(DuplicateUserEmail):
-        repository.add_admin(AdministratorDetails(email="a@example.com", nombre="Ana", apellido="Pérez"),
-                             hash_password(PASSWORD), SUPER.id, NOW)
+        repository.add_admin(details, password_hash, SUPER.id, NOW)

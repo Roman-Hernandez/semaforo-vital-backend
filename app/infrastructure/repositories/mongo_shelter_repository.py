@@ -61,6 +61,7 @@ _MATCH = "$match"
 _GROUP = "$group"
 _SORT = "$sort"
 _FIRST = "$first"
+_DISEASE_FIELD = "$enfermedad"
 
 
 def _plain(value):
@@ -205,10 +206,10 @@ class MongoShelterRepository:
     @_persistence
     def page_sir_diseases(self, shelter_id: str, since: datetime, until: datetime,
                           paging: Pagination, disease: str | None = None) -> Page[str]:
-        pipeline = [{"$match": {"albergue_id": ObjectId(shelter_id), "fecha": {"$gte": since, "$lte": until}}},
-            {"$group": {"_id": {"$toLower": {"$trim": {"input": "$enfermedad"}}}, "nombre": {"$first": "$enfermedad"}}}]
+        pipeline = [{_MATCH: {"albergue_id": ObjectId(shelter_id), "fecha": {"$gte": since, "$lte": until}}},
+            {"$group": {"_id": {"$toLower": {"$trim": {"input": _DISEASE_FIELD}}}, "nombre": {"$first": _DISEASE_FIELD}}}]
         if disease:
-            pipeline.append({"$match": {"_id": disease.strip().casefold()}})
+            pipeline.append({_MATCH: {"_id": disease.strip().casefold()}})
         pipeline.append({"$sort": {"_id": 1}})
         return paginate_aggregate(self.database.casos_enfermedades, pipeline, paging, lambda row: row["nombre"].strip())
 
@@ -318,7 +319,7 @@ class MongoShelterRepository:
         if diseases is not None:
             if not diseases:
                 return []
-            query["$expr"] = {"$in": [{"$toLower": {"$trim": {"input": "$enfermedad"}}}, [name.casefold() for name in diseases]]}
+            query["$expr"] = {"$in": [{"$toLower": {"$trim": {"input": _DISEASE_FIELD}}}, [name.casefold() for name in diseases]]}
         documents = self.database.casos_enfermedades.find(query).sort([("fecha", 1), ("updated_at", 1), ("created_at", 1), ("_id", 1)])
         return [_disease(document) for document in documents]
 
@@ -352,7 +353,7 @@ class MongoShelterRepository:
         simulations = list(self.database.predicciones_sir.aggregate([
             {_MATCH: {**scope, "escenario_id": None}},
             {_SORT: {"fecha_ejecucion": -1, "_id": -1}},
-            {_GROUP: {"_id": "$enfermedad", "simulation": {_FIRST: "$$ROOT"}}},
+            {_GROUP: {"_id": _DISEASE_FIELD, "simulation": {_FIRST: "$$ROOT"}}},
             {"$replaceRoot": {"newRoot": "$simulation"}},
             {_SORT: {"fecha_ejecucion": -1, "_id": -1}},
             {"$limit": limit},
@@ -360,7 +361,7 @@ class MongoShelterRepository:
         summaries = _plain(list(self.database.casos_enfermedades.aggregate([
             {_MATCH: scope},
             {_SORT: {"fecha": -1, "_id": -1}},
-            {_GROUP: {"_id": "$enfermedad", "cantidad_casos_activos": {_FIRST: "$cantidad_casos_activos"}, "fecha": {_FIRST: "$fecha"}}},
+            {_GROUP: {"_id": _DISEASE_FIELD, "cantidad_casos_activos": {_FIRST: "$cantidad_casos_activos"}, "fecha": {_FIRST: "$fecha"}}},
             {"$project": {"_id": 0, "enfermedad": "$_id", "cantidad_casos_activos": 1, "fecha": 1}},
             {_SORT: {"enfermedad": 1}},
         ])))

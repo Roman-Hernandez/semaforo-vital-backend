@@ -41,15 +41,8 @@ class IncompatibleSIRHistory(ValueError):
 
 
 def estimate_sir(observations: list[SIRObservation]) -> EstimatedSIR:
-    if len(observations) < 4:
-        raise InsufficientSIRHistory("Se necesitan al menos 4 observaciones en fechas diferentes")
-    if any(row.poblacion is None or row.recuperados is None for row in observations):
-        raise InsufficientSIRHistory("Faltan población histórica o recuperados observados")
+    _validate_observations(observations)
     population = observations[0].poblacion
-    if population <= 0 or any(row.poblacion != population for row in observations):
-        raise IncompatibleSIRHistory("La población cambió: el SIR cerrado requiere una serie de población constante")
-    if any(min(row.infectados, row.recuperados, row.susceptibles) < 0 for row in observations):
-        raise IncompatibleSIRHistory("Los casos activos y recuperados no pueden superar la población")
     beta_numerator = beta_denominator = gamma_numerator = gamma_denominator = 0.0
     for left, right in pairwise(observations):
         days = (right.fecha - left.fecha).days
@@ -79,3 +72,15 @@ def estimate_sir(observations: list[SIRObservation]) -> EstimatedSIR:
         dias_simulacion=(last.fecha - first.fecha).days, reduccion_beta=0))
     squared_errors = [(row.infectados - fitted.curva[(row.fecha - first.fecha).days].infectados) ** 2 for row in observations]
     return EstimatedSIR(beta, gamma, sqrt(sum(squared_errors) / len(squared_errors)), len(observations) - 1)
+
+
+def _validate_observations(observations: list[SIRObservation]) -> None:
+    if len(observations) < 4:
+        raise InsufficientSIRHistory("Se necesitan al menos 4 observaciones en fechas diferentes")
+    if any(row.poblacion is None or row.recuperados is None for row in observations):
+        raise InsufficientSIRHistory("Faltan población histórica o recuperados observados")
+    population = observations[0].poblacion
+    if population <= 0 or any(row.poblacion != population for row in observations):
+        raise IncompatibleSIRHistory("La población cambió: el SIR cerrado requiere una serie de población constante")
+    if any(min(row.infectados, row.recuperados, row.susceptibles) < 0 for row in observations):
+        raise IncompatibleSIRHistory("Los casos activos y recuperados no pueden superar la población")
