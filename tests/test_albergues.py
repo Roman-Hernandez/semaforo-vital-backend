@@ -7,12 +7,12 @@ import pytest
 from bson import ObjectId
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pagination_helpers import memory_page
 
 from app.api import deps
 from app.api.errors import register_error_handlers
 from app.api.v1.endpoints.albergues import router
 from app.core.timezone import APP_TIMEZONE
-from app.domain.errors import DuplicateShelterCode
 from app.domain.shelters import GeoPoint, Location, Shelter
 from app.domain.users import User, UserRole
 
@@ -32,16 +32,21 @@ class FakeAlbergueRepository:
         self.docs: dict[str, Shelter] = {}
 
     def add(self, command, user_id, now, day):
-        if any(s.codigo_albergue == command.codigo_albergue for s in self.docs.values()):
-            raise DuplicateShelterCode()
+        oid = ObjectId()
         shelter = Shelter(
-            id=str(ObjectId()), created_at=now, registrado_por=user_id,
-            codigo_albergue=command.codigo_albergue, nombre=command.nombre,
+            id=str(oid), created_at=now, registrado_por=user_id,
+            codigo_albergue=f"ALB-{str(oid).upper()}", nombre=command.nombre,
             ubicacion=command.ubicacion, capacidad_instalada=command.capacidad_instalada,
             activo=True, fecha=day,
         )
         self.docs[shelter.id] = shelter
         return shelter
+
+    def page_shelters(self, paging, filters, active=None, shelter_id=None):
+        rows = self.list(active)
+        if shelter_id is not None:
+            rows = [row for row in rows if row.id == shelter_id]
+        return memory_page(rows, paging, filters, "created_at")
 
     def find(self, shelter_id):
         return self.docs.get(shelter_id)
@@ -70,7 +75,6 @@ class FakeAlbergueRepository:
 
 def payload(**cambios):
     cuerpo = {
-        "codigo_albergue": "SIM-PER-003",
         "nombre": "Albergue Ejemplo",
         "capacidad_instalada": 120,
         "ubicacion": {
@@ -127,7 +131,7 @@ def test_super_crea_albergue_valido(make_client):
     r = make_client(SUPER).post(BASE, json=payload())
     assert r.status_code == 201
     cuerpo = r.json()
-    assert cuerpo["codigo_albergue"] == "SIM-PER-003"
+    assert cuerpo["codigo_albergue"] == f"ALB-{cuerpo['id'].upper()}"
     assert cuerpo["activo"] is True
     assert cuerpo["registrado_por"] == SUPER.id
     assert cuerpo["ubicacion"]["coordenadas"]["coordinates"] == [-75.6946, 4.8143]
@@ -139,10 +143,9 @@ def test_crear_fija_fecha_funcional_en_bogota(make_client):
     assert fecha.astimezone(APP_TIMEZONE).time() == time.min  # 00:00 America/Bogota
 
 
-def test_codigo_se_normaliza_a_mayusculas(make_client):
-    r = make_client(SUPER).post(BASE, json=payload(codigo_albergue="sim-per-009"))
-    assert r.status_code == 201
-    assert r.json()["codigo_albergue"] == "SIM-PER-009"
+def test_codigo_solo_lo_genera_backend(make_client):
+    r = make_client(SUPER).post(BASE, json=payload(codigo_albergue="SIM-PER-009"))
+    assert r.status_code == 422
 
 
 def test_capacidad_cero_es_valida_segun_el_contrato(make_client):
@@ -154,7 +157,7 @@ def test_super_consulta_y_lista(make_client, repo):
     sembrar(repo, "SIM-PER-002")
     client = make_client(SUPER)
     assert client.get(f"{BASE}/{a.id}").json()["codigo_albergue"] == "SIM-PER-001"
-    assert [x["codigo_albergue"] for x in client.get(BASE).json()] == ["SIM-PER-001", "SIM-PER-002"]
+    assert [x["codigo_albergue"] for x in client.get(BASE).json()["items"]] == ["SIM-PER-001", "SIM-PER-002"]
 
 
 def test_super_modifica_albergue(make_client, repo):
@@ -217,7 +220,7 @@ def test_datos_invalidos_dan_422(make_client, repo, cambios):
     assert repo.docs == {}
 
 
-@pytest.mark.parametrize("campo", ["codigo_albergue", "nombre", "capacidad_instalada", "ubicacion"])
+@pytest.mark.parametrize("campo", ["nombre", "capacidad_instalada", "ubicacion"])
 def test_campos_obligatorios(make_client, campo):
     cuerpo = payload()
     del cuerpo[campo]
@@ -246,19 +249,13 @@ def test_patch_vacio_o_con_codigo_da_422(make_client, repo):
 
 
 # --- duplicados -------------------------------------------------------------
-def test_codigo_duplicado_da_409(make_client, repo):
+def test_creaciones_generan_codigos_distintos(make_client, repo):
     client = make_client(SUPER)
-    assert client.post(BASE, json=payload()).status_code == 201
-    r = client.post(BASE, json=payload(nombre="Otro nombre"))
-    assert r.status_code == 409
-    assert r.json()["code"] == "SHELTER_CODE_DUPLICATE"
-    assert len(repo.docs) == 1
-
-
-def test_codigo_duplicado_ignora_mayusculas(make_client, repo):
-    sembrar(repo, "SIM-PER-001")
-    r = make_client(SUPER).post(BASE, json=payload(codigo_albergue="sim-per-001"))
-    assert r.status_code == 409
+    first = client.post(BASE, json=payload())
+    second = client.post(BASE, json=payload())
+    assert first.status_code == second.status_code == 201
+    assert first.json()["codigo_albergue"] != second.json()["codigo_albergue"]
+    assert len(repo.docs) == 2
 
 
 # --- permisos ---------------------------------------------------------------
@@ -286,7 +283,7 @@ def test_administrador_consulta_solo_su_albergue(make_client, repo):
     client = make_client(admin_de(propio))
     assert client.get(f"{BASE}/{propio.id}").status_code == 200
     assert client.get(f"{BASE}/{ajeno.id}").status_code == 403
-    assert [x["id"] for x in client.get(BASE).json()] == [propio.id]
+    assert [x["id"] for x in client.get(BASE).json()["items"]] == [propio.id]
 
 
 def test_administrador_modifica_capacidad_de_su_albergue(make_client, repo):
@@ -344,10 +341,32 @@ def test_lista_filtra_por_activo(make_client, repo):
     sembrar(repo, "SIM-PER-001", activo=True)
     sembrar(repo, "SIM-PER-002", activo=False)
     client = make_client(SUPER)
-    assert [x["codigo_albergue"] for x in client.get(BASE, params={"activo": True}).json()] == ["SIM-PER-001"]
-    assert [x["codigo_albergue"] for x in client.get(BASE, params={"activo": False}).json()] == ["SIM-PER-002"]
+    assert [x["codigo_albergue"] for x in client.get(BASE, params={"activo": True}).json()["items"]] == ["SIM-PER-001"]
+    assert [x["codigo_albergue"] for x in client.get(BASE, params={"activo": False}).json()["items"]] == ["SIM-PER-002"]
 
 
 def test_no_existe_endpoint_para_borrar(make_client, repo):
     a = sembrar(repo)
     assert make_client(SUPER).delete(f"{BASE}/{a.id}").status_code == 405
+
+
+def test_mongo_genera_codigo_desde_id_sin_contadores_y_soporta_concurrencia():
+    from concurrent.futures import ThreadPoolExecutor
+    from unittest.mock import MagicMock
+
+    from app.api.albergue_schemas import AlbergueCreate
+    from app.infrastructure.repositories.mongo_albergue_repository import (
+        MongoAlbergueRepository,
+    )
+
+    database = MagicMock()
+    repository = MongoAlbergueRepository(database)
+    command = AlbergueCreate(**payload()).to_command()
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda _: repository.add(command, SUPER.id, NOW, NOW), range(20)))
+    assert len({row.codigo_albergue for row in results}) == 20
+    for row in results:
+        assert row.codigo_albergue == f"ALB-{row.id.upper()}"
+    for call in database.__getitem__.return_value.insert_one.call_args_list:
+        document = call.args[0]
+        assert document["codigo_albergue"] == f"ALB-{str(document['_id']).upper()}"

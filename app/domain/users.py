@@ -17,3 +17,22 @@ class User:
     nombre: str | None = None
     apellido: str | None = None
     albergue_id: str | None = None
+    albergue_nombre: str | None = None
+    codigo_albergue: str | None = None
+
+
+@dataclass(frozen=True)
+class AdministratorDetails:
+    email: str
+    nombre: str
+    apellido: str
+    albergue_id: str | None = None
+
+
+@dataclass(frozen=True)
+class AdministratorChanges:
+    email: str | None = None
+    nombre: str | None = None
+    apellido: str | None = None
+    password_hash: str | None = None
+    active: bool | None = None

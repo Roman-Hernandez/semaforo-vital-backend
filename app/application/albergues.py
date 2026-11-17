@@ -1,8 +1,9 @@
 """Casos de uso de albergues (RF-41, RF-14, RF-15). Sin FastAPI, pydantic ni Mongo."""
 from datetime import datetime
 
-from app.domain.albergues import ShelterCreate
+from app.domain.albergues import ShelterCreate, ShelterSummary
 from app.domain.errors import InsufficientPermissions, ShelterInactive, ShelterNotFound
+from app.domain.pagination import ListFilters, Page, Pagination
 from app.domain.ports.albergue_repository import AlbergueRepository
 from app.domain.shelters import Shelter, ShelterUpdate
 from app.domain.users import User, UserRole
@@ -37,6 +38,17 @@ class AlbergueService:
     def create(self, actor: User, command: ShelterCreate, now: datetime, day: datetime) -> Shelter:
         self._require_super(actor)
         return self.repository.add(command, actor.id, now, day)
+
+    def summary(self, actor: User) -> ShelterSummary:
+        self._require_super(actor)
+        return self.repository.summary()
+
+    def page(self, actor: User, paging: Pagination, filters: ListFilters, active: bool | None = None) -> Page[Shelter]:
+        if self._is_super(actor):
+            return self.repository.page_shelters(paging, filters, active)
+        if actor.role == UserRole.SHELTER_ADMIN and actor.albergue_id is not None:
+            return self.repository.page_shelters(paging, filters, active, str(actor.albergue_id))
+        raise InsufficientPermissions()
 
     def list(self, actor: User, active: bool | None = None) -> list[Shelter]:
         if self._is_super(actor):

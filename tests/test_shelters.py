@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from bson import ObjectId
 from fastapi.testclient import TestClient
+from pagination_helpers import memory_page
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from app.api.deps import get_current_user, get_shelter_service, get_user_repository
@@ -63,6 +64,9 @@ class MemoryShelterRepository:
     def population_history(self, shelter_id, limit, offset):
         assert shelter_id == SHELTER
         return sorted(self.records.values(), key=lambda row: row.fecha, reverse=True)[offset:offset + limit]
+
+    def page_population(self, shelter_id, paging, filters):
+        return memory_page(self.population_history(shelter_id, 100000, 0), paging, filters)
 
     def save_population(self, shelter_id, user_id, day, population, now):
         assert shelter_id == SHELTER
@@ -140,7 +144,7 @@ def test_population_upsert_preserves_other_days_and_zero(api):
     for day, count in [("2026-11-11", 3), ("2026-11-12", 12), ("2026-11-12", 0)]:
         response = client.put("/api/v1/mi-albergue/poblacion", json={"fecha": day, "poblacion": count})
         assert response.status_code == 200
-    records = client.get("/api/v1/mi-albergue/poblacion/historial").json()
+    records = client.get("/api/v1/mi-albergue/poblacion/historial").json()["items"]
     assert [row["poblacion"] for row in records] == [0, 3]
     assert records[0]["fecha"].startswith("2026-11-12T00:00:00-05:00")
     assert records[0]["registrado_por"] == USER.id

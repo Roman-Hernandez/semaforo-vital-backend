@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException
 from app.domain.errors import (
     ApplicationError,
     DuplicateShelterCode,
+    DuplicateUserEmail,
     InactiveUser,
     InsufficientPermissions,
     InvalidCredentials,
@@ -20,11 +21,15 @@ from app.domain.errors import (
     NotAuthenticated,
     PersistenceError,
     PopulationConflict,
+    RecordNotFound,
     ShelterAccessDenied,
     ShelterInactive,
     ShelterNotFound,
     TokenExpiredError,
+    UserNotFound,
 )
+from app.domain.pagination import InvalidListQuery
+from app.domain.sir import InvalidSIRInput
 
 
 class ValidationIssue(BaseModel):
@@ -47,6 +52,11 @@ class ErrorDefinition:
 
 
 ERROR_CATALOG = {
+    InvalidListQuery: ErrorDefinition(422, "INVALID_LIST_QUERY", "Consulta inválida: use page y page_size (1 a 100), y un rango de fechas válido"),
+    InvalidSIRInput: ErrorDefinition(422, "INVALID_SIR_INPUT", "Parámetros SIR inválidos: verifique que I₀ + R₀ ≤ N y los rangos permitidos"),
+    UserNotFound: ErrorDefinition(404, "USER_NOT_FOUND", "Administrador no encontrado"),
+    DuplicateUserEmail: ErrorDefinition(409, "USER_EMAIL_DUPLICATE", "Ya existe un usuario con ese correo"),
+    RecordNotFound: ErrorDefinition(404, "RECORD_NOT_FOUND", "Registro no encontrado"),
     InvalidCredentials: ErrorDefinition(401, "INVALID_CREDENTIALS", "Credenciales inválidas"),
     NotAuthenticated: ErrorDefinition(401, "NOT_AUTHENTICATED", "No autenticado"),
     InvalidTokenError: ErrorDefinition(401, "INVALID_TOKEN", "Token inválido"),

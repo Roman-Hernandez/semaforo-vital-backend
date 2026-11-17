@@ -20,6 +20,10 @@ def verify_password(password: str, password_hash: str | None) -> bool:
         return False
 
 
+def hash_password(password: str) -> str:
+    return _passwords.hash(password)
+
+
 class JwtTokens:
     def __init__(self, secret: str, lifetime_minutes: int):
         if len(secret) < 32:

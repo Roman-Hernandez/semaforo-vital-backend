@@ -1,8 +1,12 @@
 """Puerto del repositorio administrativo de albergues. Solo entidades de dominio."""
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Protocol
 
-from app.domain.albergues import ShelterCreate
+from app.domain.albergues import ShelterCreate, ShelterSummary
+from app.domain.pagination import ListFilters, Page, Pagination
+from app.domain.public_shelters import PublicAlert, PublicShelter
 from app.domain.shelters import Shelter, ShelterUpdate
 
 
@@ -26,3 +30,18 @@ class AlbergueRepository(Protocol):
     def deactivate(self, shelter_id: str, user_id: str, now: datetime) -> Shelter | None:
         """Desactivación lógica: no borra el documento ni su historial."""
         ...
+
+
+    def list_public(self, limit: int, offset: int, shelter_id: str | None = None) -> list[PublicShelter]: ...
+
+    def public_alerts(self, limit: int, offset: int, shelter_id: str | None = None) -> list[PublicAlert]: ...
+
+    def page_shelters(self, paging: Pagination, filters: ListFilters, active: bool | None = None,
+                      shelter_id: str | None = None) -> Page[Shelter]: ...
+
+    def page_public_shelters(self, paging: Pagination, filters: ListFilters) -> Page[PublicShelter]: ...
+
+    def page_public_alerts(self, paging: Pagination, filters: ListFilters,
+                           shelter_id: str | None = None, active: bool | None = None) -> Page[PublicAlert]: ...
+
+    def summary(self) -> ShelterSummary: ...

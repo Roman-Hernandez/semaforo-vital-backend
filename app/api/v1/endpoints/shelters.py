@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_current_user, get_shelter_service
 from app.api.errors import ERROR_RESPONSES
+from app.api.pagination import FilterParams, PageParams, PageResponse
 from app.api.shelter_schemas import (
     DashboardResponse,
     PopulationRecordResponse,
@@ -49,11 +50,9 @@ def save_population(payload: PopulationUpdate, service: Service, user: CurrentUs
     return service.save_population(user, start_of_day_colombia(payload.fecha), payload.poblacion, now_colombia())
 
 
-@router.get("/poblacion/historial", response_model=list[PopulationRecordResponse])
-def history(service: Service, user: CurrentUser,
-            limite: Annotated[int, Query(ge=1, le=365)] = 30,
-            offset: Annotated[int, Query(ge=0)] = 0):
-    return service.history(user, limite, offset)
+@router.get("/poblacion/historial", response_model=PageResponse[PopulationRecordResponse])
+def history(service: Service, user: CurrentUser, paging: PageParams, filters: FilterParams):
+    return service.population_page(user, paging, filters)
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
