@@ -260,3 +260,36 @@ def test_disease_pagination_keeps_complete_series_and_true_total(api):
     beyond = client.get(URL + "?page=3&page_size=1").json()
     assert beyond["resultados"]["items"] == []
     assert "casos_enfermedades" not in beyond["datos_faltantes"]
+
+
+def test_reference_simulation_reads_current_eda_each_time(api):
+    from datetime import timedelta
+
+    client, repo, _, rows = api
+    url = URL.replace("resultados", "simular")
+    rows[:] = [rows[-1]]
+    first = client.post(url, json={"enfermedad": "EDA"}).json()
+    result = first["resultados"]["items"][0]
+    assert result["estado"] == "estimacion_disponible"
+    assert result["parametros_estimados"] is None
+    assert result["parametros_referencia"] == {"beta": 0.275, "gamma": 0.1}
+    assert result["proyeccion"][0]["fecha"] == first["generado_en"][:10]
+    assert result["proyeccion"][-1]["dia"] == 14
+
+    changed_at = rows[0].fecha + timedelta(microseconds=1)
+    repo.save_population(SHELTER, USER.id, changed_at, 250, changed_at)
+    blocked = client.post(url, json={"enfermedad": "EDA"}).json()["resultados"]["items"][0]
+    assert blocked["estado"] == "datos_insuficientes"
+    assert blocked["proyeccion"] == []
+
+    rows[:] = [replace(rows[0], fecha=changed_at, updated_at=changed_at)]
+    updated = client.post(url, json={"enfermedad": "EDA"}).json()["resultados"]["items"][0]
+    initial = updated["proyeccion"][0]
+    assert initial["susceptibles"] + initial["infectados"] + initial["recuperados"] == 250
+
+
+    corrected_at = changed_at + timedelta(microseconds=1)
+    repo.save_population(SHELTER, USER.id, changed_at, 240, corrected_at)
+    corrected = client.post(url, json={"enfermedad": "EDA"}).json()["resultados"]["items"][0]
+    assert corrected["estado"] == "datos_insuficientes"
+    assert corrected["proyeccion"] == []

@@ -19,6 +19,13 @@ from app.domain.sir_estimation import (
 from app.domain.users import User
 
 _BOGOTA = ZoneInfo("America/Bogota")
+EDA = "Enfermedad diarreica aguda"
+
+
+@dataclass(frozen=True)
+class SIRReferenceRates:
+    beta: float = 2.75 / 10
+    gamma: float = 1 / 10
 
 
 @dataclass(frozen=True)
@@ -50,6 +57,7 @@ class SIRDiseaseResult:
     proyeccion: list[SIRProjectedDay]
     parametros_estimados: EstimatedSIR | None
     resumen: SIRForecastSummary | None
+    parametros_referencia: SIRReferenceRates | None = None
 
 
 @dataclass(frozen=True)
@@ -71,7 +79,7 @@ def _day(value: datetime) -> date:
     return value.astimezone(_BOGOTA).date()
 
 
-def _observations(cases: list[DiseaseRecord], populations: list[PopulationRecord]) -> list[SIRObservation]:
+def _observations(cases: list[DiseaseRecord], populations: list[PopulationRecord], *, exact_time: bool = False) -> list[SIRObservation]:
     # Última corrección de cada fecha, sin sumar snapshots del mismo día.
     days: dict[date, DiseaseRecord] = {}
     for row in sorted(cases, key=lambda r: (r.fecha, r.last_updated, r.id)):
@@ -79,7 +87,7 @@ def _observations(cases: list[DiseaseRecord], populations: list[PopulationRecord
     ordered_populations = sorted(populations, key=lambda r: (r.fecha, r.last_updated, r.id), reverse=True)
     observations = []
     for day, row in sorted(days.items()):
-        population = next((p for p in ordered_populations if _day(p.fecha) <= day), None)
+        population = next((p for p in ordered_populations if (p.fecha <= row.fecha if exact_time else _day(p.fecha) <= day)), None)
         observations.append(SIRObservation(day, population.poblacion if population else None,
             row.cantidad_casos_activos, row.cantidad_recuperados, row.id, population.id if population else None))
     return observations
@@ -93,8 +101,11 @@ class SIRService:
         self.history_days = history_days
         self.max_age_days = max_age_days
 
-    def results(self, user: User, now: datetime, enfermedad: str | None = None, paging: Pagination | None = None) -> SIRResult:
+    def results(self, user: User, now: datetime, enfermedad: str | None = None, paging: Pagination | None = None,
+                *, reference: bool = False) -> SIRResult:
         paging = paging or Pagination()
+        if reference:
+            enfermedad = enfermedad or EDA
         shelter_id = assigned_shelter(user)
         shelter = self.repository.find(shelter_id)
         if shelter is None:
@@ -109,18 +120,57 @@ class SIRService:
             key = row.enfermedad.strip().casefold()
             if enfermedad is None or key == enfermedad.strip().casefold():
                 groups.setdefault(key, []).append(row)
-        results = [self._forecast(group[-1].enfermedad.strip(), _observations(group, populations), latest, now)
-                   for _, group in sorted(groups.items())]
+        results = []
+        for _, group in sorted(groups.items()):
+            latest_case = max(group, key=lambda row: (row.fecha, row.last_updated, row.id))
+            observations = _observations(group, populations, exact_time=reference)
+            disease = latest_case.enfermedad.strip()
+            if reference:
+                results.append(self._reference_forecast(disease, observations, populations, latest_case, now))
+            else:
+                results.append(self._forecast(disease, observations, latest, now))
         missing = []
         if latest is None or latest.poblacion <= 0:
             missing.append("poblacion_actual")
         if not diseases.total:
             missing.append("casos_enfermedades")
-        return SIRResult(shelter_id, shelter.nombre, latest.poblacion if latest else None,
-            latest.fecha if latest else None, now, self.horizon_days, self.history_days, "RK4", missing, PaginatedResult.create(results, paging, diseases.total),
+        assumptions = (
+            ("Escenario de EDA con parámetros de referencia de norovirus y población fija.",
+             "La corrida parte del último reporte disponible y supone que sus conteos siguen vigentes.")
+            if reference else
             ("Estimación determinista ajustada a observaciones; no es una predicción clínicamente validada",
              "Población cerrada, mezcla homogénea, tasas constantes y sin reinfecciones durante el horizonte",
-             "No se transforma la ausencia de un registro en cero ni se usan parámetros de demostración"))
+             "No se transforma la ausencia de un registro en cero ni se usan parámetros de demostración")
+        )
+        return SIRResult(shelter_id, shelter.nombre, latest.poblacion if latest else None,
+            latest.fecha if latest else None, now, self.horizon_days, self.history_days, "RK4", missing, PaginatedResult.create(results, paging, diseases.total),
+            assumptions)
+
+    def _reference_forecast(self, disease: str, observations: list[SIRObservation],
+                            populations: list[PopulationRecord], latest_case: DiseaseRecord,
+                            now: datetime) -> SIRDiseaseResult:
+        def unavailable(state, message):
+            return SIRDiseaseResult(disease, state, [message], [], observations, [], None, None)
+
+        last = observations[-1]
+        if disease.casefold() not in {EDA.casefold(), "eda"}:
+            return unavailable("datos_incompatibles", "La simulación con tasas de referencia está disponible para EDA.")
+        if (_day(now) - last.fecha).days > self.max_age_days:
+            return unavailable("datos_insuficientes", "Actualiza el reporte de EDA antes de simular.")
+        if last.poblacion is None or last.recuperados is None:
+            return unavailable("datos_insuficientes", "Registra la población y los recuperados de EDA antes de simular.")
+        population_used = next(row for row in populations if row.id == last.registro_poblacion_id)
+        if population_used.last_updated > latest_case.last_updated or any(
+            row.fecha > latest_case.fecha and row.poblacion != last.poblacion for row in populations
+        ):
+            return unavailable("datos_insuficientes", "La población cambió. Actualiza el reporte de EDA para simular.")
+        if last.poblacion <= 0 or min(last.susceptibles, last.infectados, last.recuperados) < 0:
+            return unavailable("datos_incompatibles", "Revisa que los casos activos y recuperados sean compatibles con la población.")
+        if last.infectados == 0:
+            return unavailable("sin_casos_activos", "El último reporte de EDA tiene cero casos activos.")
+        rates = SIRReferenceRates()
+        points, summary = self._project(last, rates.beta, rates.gamma, _day(now))
+        return SIRDiseaseResult(disease, "estimacion_disponible", [], [], observations, points, None, summary, rates)
 
     def _forecast(self, disease: str, observations: list[SIRObservation],
                   latest_population: PopulationRecord | None, now: datetime) -> SIRDiseaseResult:
@@ -150,13 +200,17 @@ class SIRService:
             return unavailable("datos_incompatibles", str(error))
         if last.infectados == 0:
             return unavailable("sin_casos_activos", "El último registro no tiene casos activos; SIR no estima la introducción de nuevos contagios externos")
+        points, summary = self._project(last, estimated.beta, estimated.gamma, last.fecha)
+        return SIRDiseaseResult(disease, "estimacion_disponible", [], [], observations, points, estimated, summary)
+
+    def _project(self, last: SIRObservation, beta: float, gamma: float, start: date):
         run = solve_sir(SIRSettings(poblacion_total=last.poblacion,
             infectados_iniciales=last.infectados, recuperados_iniciales=last.recuperados,
-            beta=estimated.beta, gamma=estimated.gamma, dias_simulacion=self.horizon_days,
+            beta=beta, gamma=gamma, dias_simulacion=self.horizon_days,
             paso_tiempo=0.1, reduccion_beta=0))
-        points = [SIRProjectedDay(point.dia, last.fecha + timedelta(days=point.dia),
+        points = [SIRProjectedDay(point.dia, start + timedelta(days=point.dia),
             point.susceptibles, point.infectados, point.recuperados) for point in run.curva]
-        r_effective = estimated.beta / estimated.gamma * last.susceptibles / last.poblacion if estimated.gamma else None
-        summary = SIRForecastSummary(run.pico_infectados, last.fecha + timedelta(days=run.dia_pico),
+        r_effective = beta / gamma * last.susceptibles / last.poblacion if gamma else None
+        summary = SIRForecastSummary(run.pico_infectados, start + timedelta(days=run.dia_pico),
             points[-1].infectados, points[-1].recuperados, r_effective, run.error_maximo_poblacion)
-        return SIRDiseaseResult(disease, "estimacion_disponible", [], [], observations, points, estimated, summary)
+        return points, summary
