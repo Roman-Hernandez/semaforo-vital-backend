@@ -21,9 +21,9 @@ def results(user: Actor, service: Service, paging: PageParams, enfermedad: Disea
     return service.results(user, now_colombia(), enfermedad, paging)
 
 
-@router.post("/simular", response_model=SIRResult)
+@router.post("/simular", response_model=SIRResult, summary="Simular EDA con tasas de referencia")
 def simulate(user: Actor, service: Service, paging: PageParams, payload: SIRRequest | None = None):
-    return service.results(user, now_colombia(), payload.enfermedad if payload else None, paging)
+    return service.results(user, now_colombia(), payload.enfermedad if payload else None, paging, reference=True)
 
 
 @router.get("/configuracion", response_model=SIRResult)
