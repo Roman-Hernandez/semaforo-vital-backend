@@ -93,6 +93,16 @@ def _observations(cases: list[DiseaseRecord], populations: list[PopulationRecord
     return observations
 
 
+def _group_disease_records(rows: list[DiseaseRecord], disease: str | None) -> list[list[DiseaseRecord]]:
+    filter_key = disease.strip().casefold() if disease is not None else None
+    groups: dict[str, list[DiseaseRecord]] = {}
+    for row in rows:
+        key = row.enfermedad.strip().casefold()
+        if filter_key is None or key == filter_key:
+            groups.setdefault(key, []).append(row)
+    return [groups[key] for key in sorted(groups)]
+
+
 class SIRService:
     def __init__(self, repository: ShelterRepository, *, horizon_days: int = 14,
                  history_days: int = 28, max_age_days: int = 7):
@@ -111,17 +121,12 @@ class SIRService:
         if shelter is None:
             raise ShelterNotFound()
         populations = [p for p in self.repository.population_history(shelter_id, 365, 0) if p.fecha <= now]
-        latest = max(populations, key=lambda p: (p.fecha, p.last_updated, p.id)) if populations else None
+        latest = max(populations, key=lambda p: (p.fecha, p.last_updated, p.id), default=None)
         since = now - timedelta(days=self.history_days)
         diseases = self.repository.page_sir_diseases(shelter_id, since, now, paging, enfermedad)
         rows = self.repository.sir_history(shelter_id, since, now, diseases.items) if diseases.items else []
-        groups: dict[str, list[DiseaseRecord]] = {}
-        for row in rows:
-            key = row.enfermedad.strip().casefold()
-            if enfermedad is None or key == enfermedad.strip().casefold():
-                groups.setdefault(key, []).append(row)
         results = []
-        for _, group in sorted(groups.items()):
+        for group in _group_disease_records(rows, enfermedad):
             latest_case = max(group, key=lambda row: (row.fecha, row.last_updated, row.id))
             observations = _observations(group, populations, exact_time=reference)
             disease = latest_case.enfermedad.strip()
